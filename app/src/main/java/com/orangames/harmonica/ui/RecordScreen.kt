@@ -114,7 +114,7 @@ fun RecordScreen(store: TakeStore, onBack: () -> Unit, onDone: () -> Unit) {
 
     fun finishFile(block: suspend () -> Unit) {
         scope.launch {
-            busy = "Listening for the holes…"
+            busy = "Analysing…"
             try {
                 block()
                 onDone()

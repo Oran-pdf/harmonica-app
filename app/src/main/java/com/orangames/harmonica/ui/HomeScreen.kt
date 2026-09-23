@@ -77,7 +77,7 @@ class LibraryModel(private val store: TakeStore) : ViewModel() {
 
     fun import(uri: Uri) {
         viewModelScope.launch {
-            busy = "Listening for the holes…"
+            busy = "Analysing…"
             message = null
             try {
                 store.importVideo(uri)
@@ -151,7 +151,7 @@ fun HomeScreen(
         }
         if (model.busy != null && model.takes.none { !it.ready }) {
             Spacer(Modifier.height(14.dp))
-            StatusChip("Listening…")
+            StatusChip("Analysing…")
         }
         Spacer(Modifier.height(22.dp))
         if (model.takes.isEmpty() && model.busy == null) {
@@ -284,7 +284,7 @@ private fun TakeRow(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
-                StatusChip("Listening…")
+                StatusChip("Analysing…")
             }
         }
         CorrectPill(onClick = onEdit)

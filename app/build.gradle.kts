@@ -12,17 +12,33 @@ android {
         applicationId = "com.orangames.harmonica"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.5.0"
+        versionCode = 7
+        versionName = "1.6.0"
         ndk {
             abiFilters += listOf("arm64-v8a")
+        }
+    }
+
+    val sharedStore = System.getenv("SIGNING_STORE_FILE")
+    signingConfigs {
+        if (!sharedStore.isNullOrBlank()) {
+            create("shared") {
+                storeFile = file(sharedStore)
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (!sharedStore.isNullOrBlank()) {
+                signingConfigs.getByName("shared")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

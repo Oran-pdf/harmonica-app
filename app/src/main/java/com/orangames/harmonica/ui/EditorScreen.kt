@@ -327,7 +327,7 @@ private fun WaveformBar(
     Canvas(
         Modifier
             .fillMaxWidth()
-            .height(84.dp)
+            .height(112.dp)
             .background(Ink.copy(alpha = 0.45f))
             .pointerInput(durationMs) {
                 awaitEachGesture {
