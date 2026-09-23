@@ -7,7 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,13 +18,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,7 +48,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -117,26 +125,47 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Ink)
-            .padding(horizontal = 22.dp, vertical = 28.dp),
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 22.dp)
+            .padding(top = 20.dp),
     ) {
-        Text("Harmonica", style = androidx.compose.material3.MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(22.dp))
+        Text("Harmonica", style = MaterialTheme.typography.headlineLarge)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Play it back, or correct the holes.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ActionButton("Upload", Modifier.weight(1f)) { pickVideo.launch("video/*") }
-            ActionButton("Record", Modifier.weight(1f)) { onRecord() }
+            QuietAction("Upload", Icons.Filled.FileUpload, { pickVideo.launch("video/*") }, Modifier.weight(1f))
+            PrimaryAction("Record", Icons.Filled.Videocam, onRecord, Modifier.weight(1f))
         }
         model.message?.let {
             Spacer(Modifier.height(14.dp))
-            Text(it, color = Amber, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+            Text(it, color = Amber, style = MaterialTheme.typography.bodyMedium)
+        }
+        if (model.busy != null && model.takes.none { !it.ready }) {
+            Spacer(Modifier.height(14.dp))
+            StatusChip("Listening…")
         }
         Spacer(Modifier.height(22.dp))
         if (model.takes.isEmpty() && model.busy == null) {
-            Text(
-                "Overlaid videos will show up here.",
-                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-            )
+            Column(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                HarmonicaMark(Modifier.size(width = 168.dp, height = 72.dp))
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    "Upload a video or record one.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         } else {
             LazyColumn(
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
@@ -150,10 +179,6 @@ fun HomeScreen(
                     )
                 }
             }
-        }
-        if (model.busy != null) {
-            Spacer(Modifier.height(18.dp))
-            Text(model.busy ?: "", color = Cream)
         }
     }
 
@@ -188,20 +213,6 @@ fun HomeScreen(
     }
 }
 
-@Composable
-private fun ActionButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .height(56.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(CardBrown)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, style = androidx.compose.material3.MaterialTheme.typography.labelLarge)
-    }
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TakeRow(
@@ -211,6 +222,7 @@ private fun TakeRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(18.dp)
     var thumb by remember(take.overlayUri) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(take.overlayUri) {
         thumb = store.thumbnail(take.overlayUri)
@@ -218,46 +230,59 @@ private fun TakeRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(shape)
             .background(CardBrown)
+            .border(1.dp, Line, shape)
             .combinedClickable(onClick = onPlay, onLongClick = onDelete)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(width = 108.dp, height = 72.dp)
+                .size(width = 144.dp, height = 81.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Ink),
             contentAlignment = Alignment.Center,
         ) {
             val bitmap = thumb
-            if (bitmap != null) {
+            if (take.ready && bitmap != null) {
                 Image(
                     bitmap = bitmap.asImageBitmap(),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )
+                Box(
+                    Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Ink.copy(alpha = 0.62f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = Cream,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            } else {
+                MarkPlaceholder(Modifier.fillMaxSize())
             }
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(take.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                if (take.ready) formatClock(take.durationMs) else "Drawing the harmonica…",
-                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-            )
+            Text(take.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            Spacer(Modifier.height(6.dp))
+            if (take.ready) {
+                Text(
+                    "${formatClock(take.durationMs)}  ·  ${take.key}",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                StatusChip("Listening…")
+            }
         }
-        Text(
-            "Correct",
-            modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .clickable(onClick = onEdit)
-                .padding(horizontal = 8.dp, vertical = 10.dp),
-            color = Amber,
-            textAlign = TextAlign.Center,
-        )
+        CorrectPill(onClick = onEdit)
     }
 }

@@ -26,14 +26,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -150,24 +153,17 @@ fun RecordScreen(store: TakeStore, onBack: () -> Unit, onDone: () -> Unit) {
             Text(
                 formatElapsed(elapsed),
                 color = Cream,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 22.dp),
-                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 18.dp),
+                style = MaterialTheme.typography.titleMedium,
             )
         }
 
-        Text(
-            "Back",
-            color = Cream,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Ink.copy(alpha = 0.55f))
-                .clickable {
-                    if (bridge.recording) bridge.abandon?.invoke()
-                    onBack()
-                }
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+        BackButton(
+            onClick = {
+                if (bridge.recording) bridge.abandon?.invoke()
+                onBack()
+            },
+            modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(16.dp),
         )
 
         if (error != null && !permitted) {
@@ -181,7 +177,8 @@ fun RecordScreen(store: TakeStore, onBack: () -> Unit, onDone: () -> Unit) {
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 28.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 20.dp)
                 .clip(RoundedCornerShape(32.dp))
                 .background(Ink.copy(alpha = 0.62f))
                 .padding(horizontal = 22.dp, vertical = 14.dp),
@@ -205,7 +202,11 @@ fun RecordScreen(store: TakeStore, onBack: () -> Unit, onDone: () -> Unit) {
                     )
                 }
                 Spacer(Modifier.height(6.dp))
-                Text(if (videoOn) "Video off" else "Video on", color = Cream)
+                Text(
+                    if (videoOn) "Video off" else "Video on",
+                    color = Cream,
+                    style = MaterialTheme.typography.labelLarge,
+                )
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 RecordButton(
@@ -216,7 +217,11 @@ fun RecordScreen(store: TakeStore, onBack: () -> Unit, onDone: () -> Unit) {
                     },
                 )
                 Spacer(Modifier.height(6.dp))
-                Text(if (bridge.recording) "Stop" else "Record", color = Cream)
+                Text(
+                    if (bridge.recording) "Stop" else "Record",
+                    color = Cream,
+                    style = MaterialTheme.typography.labelLarge,
+                )
             }
         }
 

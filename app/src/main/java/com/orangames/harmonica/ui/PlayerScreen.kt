@@ -2,10 +2,10 @@ package com.orangames.harmonica.ui
 
 import android.net.Uri
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -56,15 +56,13 @@ fun PlayerScreen(store: TakeStore, id: String, onBack: () -> Unit, onEdit: () ->
             },
             update = { it.player = player },
         )
-        Text(
-            "Back",
-            color = Cream,
-            modifier = Modifier.align(Alignment.TopStart).padding(18.dp).clickable(onClick = onBack),
+        BackButton(
+            onClick = onBack,
+            modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(16.dp),
         )
-        Text(
-            "Correct",
-            color = Amber,
-            modifier = Modifier.align(Alignment.TopEnd).padding(18.dp).clickable(onClick = onEdit),
+        CorrectPill(
+            onClick = onEdit,
+            modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(16.dp),
         )
     }
 }

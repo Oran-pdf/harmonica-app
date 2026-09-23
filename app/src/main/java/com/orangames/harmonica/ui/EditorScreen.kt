@@ -18,10 +18,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -218,7 +225,7 @@ fun EditorScreen(model: EditorModel, onBack: () -> Unit) {
             },
         )
         Transport(
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
             playing = model.playing,
             onBack = onBack,
             onStep = { dir ->
@@ -357,29 +364,42 @@ private fun Transport(
             .background(Ink.copy(alpha = 0.72f))
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        TransportText("Back", onBack)
-        TransportText("−1") { onStep(-1) }
+        BackButton(onClick = onBack)
+        FrameStep(Icons.Filled.KeyboardArrowLeft, "Previous frame") { onStep(-1) }
         Box(
             Modifier
-                .size(44.dp)
+                .size(52.dp)
                 .clip(CircleShape)
                 .background(Cream)
                 .clickable(onClick = onPlay),
             contentAlignment = Alignment.Center,
         ) {
-            Text(if (playing) "II" else "▶", color = Ink)
+            Icon(
+                if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                contentDescription = if (playing) "Pause" else "Play",
+                tint = Ink,
+                modifier = Modifier.size(28.dp),
+            )
         }
-        TransportText("+1") { onStep(1) }
+        FrameStep(Icons.Filled.KeyboardArrowRight, "Next frame") { onStep(1) }
     }
 }
 
 @Composable
-private fun TransportText(label: String, onClick: () -> Unit) {
-    Text(
-        label,
-        color = Cream,
-        modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
-    )
+private fun FrameStep(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = description, tint = Cream, modifier = Modifier.size(28.dp))
+    }
 }

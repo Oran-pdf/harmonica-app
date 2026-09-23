@@ -55,6 +55,12 @@ private val Type = Typography(
         fontSize = 16.sp,
         color = Cream,
     ),
+    labelSmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        color = Ink,
+    ),
 )
 
 @Composable
