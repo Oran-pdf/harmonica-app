@@ -52,13 +52,15 @@ object SchemePainter {
         time: Double,
         events: List<NoteEvent>,
         look: Look,
+        animate: Boolean = true,
     ) {
         if (look.id == "simple") {
             HudPainter.drawHud(canvas, layout, ox, oy, key, marksAt(events, time))
             return
         }
-        drawBackdrop(canvas, layout, ox, oy, look.backdrop)
-        drawHarp(canvas, layout, ox, oy, key, look.harp)
+        val shown = if (animate) look else look.copy(motion = 0)
+        drawBackdrop(canvas, layout, ox, oy, shown.backdrop)
+        drawHarp(canvas, layout, ox, oy, key, shown.harp)
         val litIds = HashSet<String>()
         for (event in events) {
             if (time < event.t0 || time >= event.t1) continue
@@ -66,23 +68,23 @@ object SchemePainter {
         }
         for (hit in layout.squares) {
             if (idOf(hit) in litIds) continue
-            drawIdle(canvas, ox + hit.cx, oy + hit.cy, hit.half, look.idle, look.harp)
+            drawIdle(canvas, ox + hit.cx, oy + hit.cy, hit.half, shown.idle, shown.harp)
         }
         for (event in events) {
             val age = time - event.t0
             val since = time - event.t1
             val active = time >= event.t0 && time < event.t1
-            val leaving = since in 0.0..EXIT
+            val leaving = animate && since in 0.0..EXIT
             if (!active && !leaving) continue
             val enter = if (active) (age / ENTER).coerceIn(0.0, 1.0).toFloat() else 1f
             val exit = if (leaving) (since / EXIT).coerceIn(0.0, 1.0).toFloat() else 0f
             val group = hits(layout, event)
             if (group.isEmpty()) continue
-            if (active || look.motion == 6 || look.motion == 7) {
-                drawLitGroup(canvas, layout, ox, oy, group, look, enter, exit, time, active)
+            if (active || shown.motion == 6 || shown.motion == 7) {
+                drawLitGroup(canvas, layout, ox, oy, group, shown, enter, exit, time, active)
             }
             if (leaving) {
-                drawMotion(canvas, layout, ox, oy, group, look.motion, exit, event.breath == "blow")
+                drawMotion(canvas, layout, ox, oy, group, shown.motion, exit, event.breath == "blow")
             }
         }
     }
@@ -103,112 +105,158 @@ object SchemePainter {
 
     private fun drawBackdrop(canvas: Canvas, layout: HudLayout, ox: Float, oy: Float, kind: Int) {
         if (kind < 0) return
-        val pad = layout.sq * 0.85f
+        val pad = layout.sq * 1.15f
         val left = ox - pad
-        val top = oy - pad * 0.2f
+        val top = oy - pad * 0.55f
         val right = ox + layout.width + pad
-        val bottom = oy + layout.height + pad * 0.35f
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xCC241910.toInt() }
-        val path = Path()
-        when (kind) {
-            0 -> cloud(path, left, top, right, bottom)
-            1 -> ribbon(path, left, top, right, bottom)
-            2 -> arch(path, left, top, right, bottom)
-            3 -> wave(path, left, top, right, bottom)
-            4 -> rays(canvas, left, top, right, bottom, paint)
-            5 -> ticket(path, left, top, right, bottom)
-            6 -> petals(canvas, left, top, right, bottom, paint)
-            else -> shield(path, left, top, right, bottom)
-        }
-        if (kind != 4 && kind != 6 && !path.isEmpty) canvas.drawPath(path, paint)
-    }
-
-    private fun cloud(path: Path, left: Float, top: Float, right: Float, bottom: Float) {
+        val bottom = oy + layout.height + pad * 0.7f
+        val cx = (left + right) / 2f
+        val cy = (top + bottom) / 2f
         val w = right - left
         val h = bottom - top
-        path.addCircle(left + w * 0.28f, top + h * 0.55f, h * 0.42f, Path.Direction.CW)
-        path.addCircle(left + w * 0.52f, top + h * 0.42f, h * 0.48f, Path.Direction.CW)
-        path.addCircle(left + w * 0.74f, top + h * 0.56f, h * 0.4f, Path.Direction.CW)
-        path.addCircle(left + w * 0.5f, top + h * 0.7f, w * 0.34f, Path.Direction.CW)
+        canvas.save()
+        val clip = Path()
+        clip.addCircle(left + w * 0.22f, cy, h * 0.48f, Path.Direction.CW)
+        clip.addCircle(cx, cy - h * 0.08f, h * 0.55f, Path.Direction.CW)
+        clip.addCircle(right - w * 0.22f, cy, h * 0.48f, Path.Direction.CW)
+        clip.addOval(RectF(left + w * 0.08f, top + h * 0.18f, right - w * 0.08f, bottom - h * 0.08f), Path.Direction.CW)
+        canvas.clipPath(clip)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        when (kind) {
+            0 -> aurora(canvas, paint, left, top, right, bottom)
+            1 -> ember(canvas, paint, left, top, right, bottom)
+            2 -> lagoon(canvas, paint, left, top, right, bottom)
+            3 -> dusk(canvas, paint, left, top, right, bottom)
+            4 -> mosaic(canvas, paint, left, top, right, bottom)
+            5 -> neon(canvas, paint, cx, cy, w, h)
+            6 -> garden(canvas, paint, cx, cy, w, h)
+            else -> festival(canvas, paint, cx, cy, w, h)
+        }
+        canvas.restore()
     }
 
-    private fun ribbon(path: Path, left: Float, top: Float, right: Float, bottom: Float) {
-        val notch = (bottom - top) * 0.28f
-        val mid = (top + bottom) / 2f
-        path.moveTo(left + notch, top)
-        path.lineTo(right - notch, top)
-        path.lineTo(right, mid)
-        path.lineTo(right - notch, bottom)
-        path.lineTo(left + notch, bottom)
-        path.lineTo(left, mid)
-        path.close()
+    private fun fill(canvas: Canvas, paint: Paint, color: Int, rect: RectF) {
+        paint.shader = null
+        paint.style = Paint.Style.FILL
+        paint.color = color
+        canvas.drawOval(rect, paint)
     }
 
-    private fun arch(path: Path, left: Float, top: Float, right: Float, bottom: Float) {
-        val rect = RectF(left, top, right, top + (bottom - top) * 1.15f)
-        path.moveTo(left, bottom)
-        path.lineTo(left, top + (bottom - top) * 0.45f)
-        path.arcTo(rect, 180f, 180f, false)
-        path.lineTo(right, bottom)
-        path.close()
+    private fun aurora(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
+        val h = bottom - top
+        fill(canvas, paint, 0xCC6C4DFF.toInt(), RectF(left, top + h * 0.15f, right, top + h * 0.72f))
+        fill(canvas, paint, 0xCC14C8C2.toInt(), RectF(left + (right - left) * 0.15f, top, right, top + h * 0.55f))
+        fill(canvas, paint, 0xDDF0C14A.toInt(), RectF(left, top + h * 0.42f, right - (right - left) * 0.1f, bottom))
     }
 
-    private fun wave(path: Path, left: Float, top: Float, right: Float, bottom: Float) {
-        val amp = (bottom - top) * 0.12f
-        path.moveTo(left, top + amp)
-        path.quadTo((left + right) / 2f, top - amp, right, top + amp)
-        path.lineTo(right, bottom - amp)
-        path.quadTo((left + right) / 2f, bottom + amp, left, bottom - amp)
-        path.close()
+    private fun ember(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
+        val w = right - left
+        val h = bottom - top
+        fill(canvas, paint, 0xE6C4232A.toInt(), RectF(left, top + h * 0.2f, left + w * 0.7f, bottom))
+        fill(canvas, paint, 0xEEF06A22.toInt(), RectF(left + w * 0.28f, top, right, top + h * 0.75f))
+        fill(canvas, paint, 0xEEF6C14A.toInt(), RectF(left + w * 0.4f, top + h * 0.35f, right, bottom))
     }
 
-    private fun rays(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
-        val cx = (left + right) / 2f
-        val cy = (top + bottom) / 2f
-        val reach = max(right - left, bottom - top) * 0.62f
-        paint.color = 0xAA3A2A18.toInt()
-        for (i in 0 until 14) {
-            val a0 = (i / 14f) * 2f * PI.toFloat()
-            val a1 = a0 + 0.16f
-            val path = Path()
-            path.moveTo(cx, cy)
-            path.lineTo(cx + cos(a0) * reach, cy + sin(a0) * reach * 0.72f)
-            path.lineTo(cx + cos(a1) * reach, cy + sin(a1) * reach * 0.72f)
-            path.close()
-            canvas.drawPath(path, paint)
+    private fun lagoon(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
+        val w = right - left
+        val h = bottom - top
+        fill(canvas, paint, 0xE0143D73.toInt(), RectF(left, top + h * 0.12f, right, bottom))
+        fill(canvas, paint, 0xE01EC8B8.toInt(), RectF(left + w * 0.2f, top, left + w * 0.85f, top + h * 0.7f))
+        fill(canvas, paint, 0xCC7CFF6B.toInt(), RectF(left, top + h * 0.45f, left + w * 0.55f, bottom))
+    }
+
+    private fun dusk(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
+        val w = right - left
+        val h = bottom - top
+        fill(canvas, paint, 0xE62A1458.toInt(), RectF(left, top, right, bottom))
+        fill(canvas, paint, 0xDDE23A8C.toInt(), RectF(left + w * 0.25f, top + h * 0.05f, right, top + h * 0.7f))
+        fill(canvas, paint, 0xEEF2B84B.toInt(), RectF(left + w * 0.15f, top + h * 0.42f, left + w * 0.72f, bottom))
+    }
+
+    private fun mosaic(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
+        val colors = intArrayOf(
+            0xE6E23B6A.toInt(),
+            0xE6F0A202.toInt(),
+            0xE61B9AAA.toInt(),
+            0xE65B4DFF.toInt(),
+            0xE63DDC6A.toInt(),
+        )
+        val cols = 7
+        val rows = 3
+        val cw = (right - left) / cols
+        val ch = (bottom - top) / rows
+        for (row in 0 until rows) {
+            for (col in 0 until cols) {
+                val shift = if (row % 2 == 0) 0f else cw * 0.5f
+                val x = left + col * cw + shift
+                val y = top + row * ch
+                paint.shader = null
+                paint.style = Paint.Style.FILL
+                paint.color = colors[(row * cols + col) % colors.size]
+                val path = Path()
+                path.moveTo(x, y + ch * 0.5f)
+                path.lineTo(x + cw * 0.5f, y)
+                path.lineTo(x + cw, y + ch * 0.5f)
+                path.lineTo(x + cw * 0.5f, y + ch)
+                path.close()
+                canvas.drawPath(path, paint)
+            }
         }
     }
 
-    private fun ticket(path: Path, left: Float, top: Float, right: Float, bottom: Float) {
-        val bite = (bottom - top) * 0.16f
-        val mid = (top + bottom) / 2f
-        path.fillType = Path.FillType.EVEN_ODD
-        path.addRoundRect(RectF(left, top, right, bottom), bite, bite, Path.Direction.CW)
-        path.addCircle(left, mid, bite, Path.Direction.CCW)
-        path.addCircle(right, mid, bite, Path.Direction.CCW)
+    private fun neon(canvas: Canvas, paint: Paint, cx: Float, cy: Float, w: Float, h: Float) {
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = h * 0.16f
+        paint.color = 0xEEFF2BD6.toInt()
+        canvas.drawOval(RectF(cx - w * 0.42f, cy - h * 0.42f, cx + w * 0.2f, cy + h * 0.38f), paint)
+        paint.color = 0xEE2EE7FF.toInt()
+        canvas.drawOval(RectF(cx - w * 0.18f, cy - h * 0.36f, cx + w * 0.46f, cy + h * 0.46f), paint)
+        paint.style = Paint.Style.FILL
+        paint.color = 0xAAFFE14A.toInt()
+        canvas.drawCircle(cx, cy, h * 0.16f, paint)
     }
 
-    private fun petals(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
-        val cx = (left + right) / 2f
-        val cy = (top + bottom) / 2f
-        val rx = (right - left) * 0.28f
-        val ry = (bottom - top) * 0.42f
-        paint.color = 0xB32E2218.toInt()
-        for (i in 0 until 6) {
+    private fun garden(canvas: Canvas, paint: Paint, cx: Float, cy: Float, w: Float, h: Float) {
+        val colors = intArrayOf(0xE23DDC6A.toInt(), 0xE2F25C8A.toInt(), 0xE2F0C14A.toInt(), 0xE21EC8B8.toInt())
+        paint.style = Paint.Style.FILL
+        for (i in 0 until 8) {
             canvas.save()
-            canvas.rotate(i * 30f, cx, cy)
-            canvas.drawOval(RectF(cx - rx, cy - ry, cx + rx * 0.2f, cy + ry), paint)
+            canvas.rotate(i * 45f, cx, cy)
+            paint.color = colors[i % colors.size]
+            canvas.drawOval(RectF(cx - w * 0.08f, cy - h * 0.48f, cx + w * 0.16f, cy - h * 0.02f), paint)
             canvas.restore()
         }
+        paint.color = 0xEEFFE7A0.toInt()
+        canvas.drawCircle(cx, cy, h * 0.14f, paint)
     }
 
-    private fun shield(path: Path, left: Float, top: Float, right: Float, bottom: Float) {
-        val cx = (left + right) / 2f
-        path.moveTo(cx, bottom)
-        path.lineTo(left, top + (bottom - top) * 0.42f)
-        path.quadTo(left, top, cx, top + (bottom - top) * 0.06f)
-        path.quadTo(right, top, right, top + (bottom - top) * 0.42f)
-        path.close()
+    private fun festival(canvas: Canvas, paint: Paint, cx: Float, cy: Float, w: Float, h: Float) {
+        val colors = intArrayOf(
+            0xEEFF4B6A.toInt(),
+            0xEEFFD23A.toInt(),
+            0xEE2EE7FF.toInt(),
+            0xEEB06BFF.toInt(),
+            0xEE3DDC6A.toInt(),
+            0xEEFF8A2A.toInt(),
+        )
+        val reach = max(w, h) * 0.55f
+        paint.style = Paint.Style.FILL
+        for (i in colors.indices) {
+            val a0 = -PI.toFloat() * 0.15f + (i / colors.size.toFloat()) * PI.toFloat() * 1.15f
+            val a1 = a0 + PI.toFloat() * 1.15f / colors.size * 0.82f
+            val path = Path()
+            path.moveTo(cx, cy)
+            path.lineTo(cx + cos(a0) * reach, cy + sin(a0) * reach * 0.62f)
+            path.quadTo(
+                cx + cos((a0 + a1) / 2f) * reach * 1.15f,
+                cy + sin((a0 + a1) / 2f) * reach * 0.75f,
+                cx + cos(a1) * reach,
+                cy + sin(a1) * reach * 0.62f,
+            )
+            path.close()
+            paint.color = colors[i]
+            canvas.drawPath(path, paint)
+        }
     }
 
     private fun drawHarp(canvas: Canvas, layout: HudLayout, ox: Float, oy: Float, key: String, harp: Int) {

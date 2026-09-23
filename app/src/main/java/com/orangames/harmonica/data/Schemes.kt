@@ -25,7 +25,7 @@ object Looks {
     val lits = listOf("Flat", "Glow", "Flame", "Ink", "Orb", "Shine", "Ring", "Spark")
     val idles = listOf("Squares", "Dim", "Rings", "Dents", "Paper", "Pinholes", "Dashes", "Hidden")
     val motions = listOf("Snap", "Shatter", "Rise", "Splatter", "Burst", "Drops", "Fade", "Pop")
-    val backdrops = listOf("Cloud", "Ribbon", "Arch", "Wave", "Rays", "Ticket", "Petals", "Shield")
+    val backdrops = listOf("Aurora", "Ember", "Lagoon", "Dusk", "Mosaic", "Neon", "Garden", "Festival")
 
     val builtins = listOf(
         Look("simple", "Simple", "The plain bar from your videos so far.", true, 0, 0, 0, 0, -1),
@@ -48,7 +48,7 @@ object SchemeStore {
     val selected: Look
         get() = find(selectedId)
 
-    fun all(): List<Look> = Looks.builtins + customs
+    fun all(): List<Look> = customs + Looks.builtins
 
     fun find(id: String): Look = Looks.builtin(id) ?: customs.find { it.id == id } ?: Looks.builtins.first()
 
@@ -104,7 +104,8 @@ object SchemeStore {
             motion = motion,
             backdrop = backdrop,
         )
-        customs = customs + look
+        customs = listOf(look) + customs
+        selectedId = look.id
         save(context)
         return look
     }

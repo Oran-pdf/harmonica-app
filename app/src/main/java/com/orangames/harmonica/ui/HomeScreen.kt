@@ -29,7 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
@@ -144,7 +144,7 @@ fun HomeScreen(
             PrimaryAction("Record", Icons.Filled.Videocam, onRecord, Modifier.weight(1f))
         }
         Spacer(Modifier.height(12.dp))
-        QuietAction("Harmonicas", Icons.Filled.MusicNote, onDesigns, Modifier.fillMaxWidth())
+        QuietAction("Harmonicas", Icons.Filled.Palette, onDesigns, Modifier.fillMaxWidth())
         model.message?.let {
             Spacer(Modifier.height(14.dp))
             Text(it, color = Amber, style = MaterialTheme.typography.bodyMedium)

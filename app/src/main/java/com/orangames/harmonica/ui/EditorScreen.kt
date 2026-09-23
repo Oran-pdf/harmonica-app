@@ -310,6 +310,7 @@ private fun HarmonicaOverlay(
                         timeSec,
                         events,
                         look,
+                        animate = false,
                     )
                 }
             }
