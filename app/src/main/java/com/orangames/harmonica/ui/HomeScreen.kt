@@ -64,7 +64,7 @@ class LibraryModel(private val store: TakeStore) : ViewModel() {
 
     fun import(uri: Uri) {
         viewModelScope.launch {
-            busy = "Drawing the harmonica…"
+            busy = "Listening for the holes…"
             message = null
             try {
                 store.importVideo(uri)

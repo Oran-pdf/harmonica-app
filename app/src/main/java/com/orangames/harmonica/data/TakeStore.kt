@@ -4,9 +4,11 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
+import com.orangames.harmonica.media.Detector
 import com.orangames.harmonica.media.Gallery
 import com.orangames.harmonica.media.VideoExport
 import com.orangames.harmonica.media.extractPeaks
+import com.orangames.harmonica.media.extractWav
 import com.orangames.harmonica.media.probeDurationMs
 import com.orangames.harmonica.media.probeVideo
 import com.orangames.harmonica.media.readPeaks
@@ -159,8 +161,8 @@ class TakeStore(private val context: Context) {
             error("Could not read that recording")
         }
         val title = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date())
-        val doc = TimelineDoc("C", emptyList())
-        File(folder, "timeline.json").writeText(encodeTimeline(doc))
+        val detected = detectTimeline(source)
+        File(folder, "timeline.json").writeText(detected)
         writeMeta(
             folder,
             Take(
@@ -181,6 +183,20 @@ class TakeStore(private val context: Context) {
         changesFlow.tryEmit(Unit)
         requestExport(id)
         return id
+    }
+
+    private fun detectTimeline(source: File): String {
+        val wav = File(source.parentFile, "detect.wav")
+        return try {
+            extractWav(source, wav)
+            Detector.notesJson(wav.absolutePath, "C")
+        } catch (error: Exception) {
+            Log.e(TAG, "detect", error)
+            lastError = "The holes could not be detected. You can mark them by hand."
+            encodeTimeline(TimelineDoc("C", emptyList()))
+        } finally {
+            wav.delete()
+        }
     }
 
     private suspend fun exportOne(id: String) {

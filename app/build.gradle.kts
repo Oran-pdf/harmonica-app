@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.chaquo.python")
 }
 
 android {
@@ -11,8 +12,11 @@ android {
         applicationId = "com.orangames.harmonica"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -43,6 +47,15 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+chaquopy {
+    defaultConfig {
+        version = "3.12"
+        pip {
+            install("numpy")
         }
     }
 }

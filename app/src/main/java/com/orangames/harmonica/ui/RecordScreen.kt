@@ -22,14 +22,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -37,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -44,27 +49,34 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.orangames.harmonica.data.TakeStore
 import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private enum class CaptureMode { Choose, Video, Audio }
+private class CaptureBridge {
+    var start: (() -> Unit)? = null
+    var stop: (() -> Unit)? = null
+    var abandon: (() -> Unit)? = null
+    var recording by mutableStateOf(false)
+}
 
 @Composable
 fun RecordScreen(store: TakeStore, onBack: () -> Unit, onDone: () -> Unit) {
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
-    var mode by remember { mutableStateOf(CaptureMode.Choose) }
+    val bridge = remember { CaptureBridge() }
+    var videoOn by remember { mutableStateOf(true) }
+    var permitted by remember { mutableStateOf(hasCapturePermission(context)) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var pending by remember { mutableStateOf<CaptureMode?>(null) }
+    var elapsed by remember { mutableLongStateOf(0L) }
 
     DisposableEffect(Unit) {
         view.keepScreenOn = true
@@ -74,62 +86,140 @@ fun RecordScreen(store: TakeStore, onBack: () -> Unit, onDone: () -> Unit) {
     val permissions = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted ->
-        val wanted = pending
-        pending = null
-        if (wanted != null && granted.values.all { it }) mode = wanted
-        else if (wanted != null) error = "Allow the microphone to record."
+        permitted = granted[Manifest.permission.CAMERA] == true &&
+            granted[Manifest.permission.RECORD_AUDIO] == true
+        if (!permitted) error = "Allow the camera and microphone to record."
     }
 
-    fun ask(next: CaptureMode) {
-        error = null
-        val needed = if (next == CaptureMode.Video) {
-            arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
-        } else {
-            arrayOf(Manifest.permission.RECORD_AUDIO)
+    LaunchedEffect(Unit) {
+        if (!permitted) {
+            permissions.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
         }
-        val missing = needed.filter {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+    }
+
+    LaunchedEffect(bridge.recording) {
+        if (!bridge.recording) {
+            elapsed = 0L
+            return@LaunchedEffect
         }
-        if (missing.isEmpty()) mode = next
-        else {
-            pending = next
-            permissions.launch(missing.toTypedArray())
+        val started = System.currentTimeMillis()
+        while (bridge.recording) {
+            elapsed = System.currentTimeMillis() - started
+            delay(200)
         }
     }
 
     fun finishFile(block: suspend () -> Unit) {
         scope.launch {
-            busy = "Drawing the harmonica…"
+            busy = "Listening for the holes…"
             try {
                 block()
                 onDone()
             } catch (exception: Exception) {
                 busy = null
                 error = exception.message ?: "Could not save that recording"
-                mode = CaptureMode.Choose
             }
         }
     }
 
     Box(Modifier.fillMaxSize().background(Ink)) {
-        when (mode) {
-            CaptureMode.Choose -> ChooseCapture(
-                error = error,
-                onVideo = { ask(CaptureMode.Video) },
-                onAudio = { ask(CaptureMode.Audio) },
-                onBack = onBack,
-            )
-            CaptureMode.Video -> VideoCapturePane(
-                enabled = busy == null,
-                onCancel = { mode = CaptureMode.Choose },
+        if (permitted && videoOn) {
+            VideoCapturePane(
+                bridge = bridge,
                 onFile = { file -> finishFile { store.importRecordedVideo(file) } },
+                onFailed = {
+                    error = "The camera did not open."
+                    videoOn = false
+                },
             )
-            CaptureMode.Audio -> AudioCapturePane(
-                enabled = busy == null,
-                onCancel = { mode = CaptureMode.Choose },
+        } else if (permitted) {
+            AudioCapturePane(
+                bridge = bridge,
                 onFile = { file -> finishFile { store.importRecordedAudio(file) } },
             )
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Filled.VideocamOff, contentDescription = null, tint = Muted, modifier = Modifier.size(42.dp))
+                    Spacer(Modifier.height(10.dp))
+                    Text("Picture is off", color = Muted)
+                }
+            }
         }
+
+        if (bridge.recording) {
+            Text(
+                formatElapsed(elapsed),
+                color = Cream,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 22.dp),
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+            )
+        }
+
+        Text(
+            "Back",
+            color = Cream,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Ink.copy(alpha = 0.55f))
+                .clickable {
+                    if (bridge.recording) bridge.abandon?.invoke()
+                    onBack()
+                }
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+        )
+
+        if (error != null && !permitted) {
+            Text(
+                error ?: "",
+                color = Amber,
+                modifier = Modifier.align(Alignment.Center).padding(28.dp),
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 28.dp)
+                .clip(RoundedCornerShape(32.dp))
+                .background(Ink.copy(alpha = 0.62f))
+                .padding(horizontal = 22.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
+        ) {
+            val videoEnabled = permitted && busy == null && !bridge.recording
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(if (videoOn) CardBrown else Amber)
+                        .clickable(enabled = videoEnabled) { videoOn = !videoOn },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = if (videoOn) Icons.Filled.VideocamOff else Icons.Filled.Videocam,
+                        contentDescription = if (videoOn) "Turn video off" else "Turn video on",
+                        tint = if (videoOn) Cream else Ink,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(if (videoOn) "Video off" else "Video on", color = Cream)
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                RecordButton(
+                    active = bridge.recording,
+                    enabled = permitted && busy == null,
+                    onClick = {
+                        if (bridge.recording) bridge.stop?.invoke() else bridge.start?.invoke()
+                    },
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(if (bridge.recording) "Stop" else "Record", color = Cream)
+            }
+        }
+
         if (busy != null) {
             Box(Modifier.fillMaxSize().background(Ink.copy(alpha = 0.86f)), contentAlignment = Alignment.Center) {
                 Text(busy ?: "", color = Cream)
@@ -138,54 +228,17 @@ fun RecordScreen(store: TakeStore, onBack: () -> Unit, onDone: () -> Unit) {
     }
 }
 
+private fun hasCapturePermission(context: android.content.Context): Boolean {
+    return ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+}
+
 @Composable
-private fun ChooseCapture(
-    error: String?,
-    onVideo: () -> Unit,
-    onAudio: () -> Unit,
-    onBack: () -> Unit,
+private fun VideoCapturePane(
+    bridge: CaptureBridge,
+    onFile: (File) -> Unit,
+    onFailed: () -> Unit,
 ) {
-    Column(
-        Modifier.fillMaxSize().padding(22.dp),
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text("Record", style = androidx.compose.material3.MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Video keeps the picture. Audio becomes a video with a quiet background.",
-            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-        )
-        Spacer(Modifier.height(28.dp))
-        ChoiceCard("Video", "Camera and sound") { onVideo() }
-        Spacer(Modifier.height(12.dp))
-        ChoiceCard("Audio only", "Sound, then a still picture") { onAudio() }
-        if (error != null) {
-            Spacer(Modifier.height(16.dp))
-            Text(error, color = Amber)
-        }
-        Spacer(Modifier.height(28.dp))
-        Text("Back", color = Muted, modifier = Modifier.clickable(onClick = onBack).padding(vertical = 8.dp))
-    }
-}
-
-@Composable
-private fun ChoiceCard(title: String, detail: String, onClick: () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(CardBrown)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 16.dp),
-    ) {
-        Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(4.dp))
-        Text(detail, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
-    }
-}
-
-@Composable
-private fun VideoCapturePane(enabled: Boolean, onCancel: () -> Unit, onFile: (File) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember {
@@ -193,7 +246,7 @@ private fun VideoCapturePane(enabled: Boolean, onCancel: () -> Unit, onFile: (Fi
     }
     var recording by remember { mutableStateOf<Recording?>(null) }
     var capture by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
-    var keep by remember { mutableStateOf(true) }
+    var save by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val future = ProcessCameraProvider.getInstance(context)
@@ -217,12 +270,17 @@ private fun VideoCapturePane(enabled: Boolean, onCancel: () -> Unit, onFile: (Fi
                     videoCapture,
                 )
             } catch (_: Exception) {
-                onCancel()
+                onFailed()
             }
         }, executor)
         onDispose {
-            keep = false
-            recording?.stop()
+            bridge.start = null
+            bridge.stop = null
+            bridge.abandon = null
+            if (!save) {
+                bridge.recording = false
+                recording?.stop()
+            }
             try {
                 future.get().unbindAll()
             } catch (_: Exception) {
@@ -230,96 +288,65 @@ private fun VideoCapturePane(enabled: Boolean, onCancel: () -> Unit, onFile: (Fi
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
-        AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
-        RecordButton(
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp),
-            active = recording != null,
-            enabled = enabled,
-            onClick = {
-                val video = capture ?: return@RecordButton
-                if (recording != null) {
-                    recording?.stop()
-                    recording = null
-                    return@RecordButton
-                }
-                val file = File(context.cacheDir, "take-${System.currentTimeMillis()}.mp4")
-                val options = FileOutputOptions.Builder(file).build()
-                recording = video.output.prepareRecording(context, options)
-                    .withAudioEnabled()
-                    .start(ContextCompat.getMainExecutor(context)) { event ->
-                        if (event is VideoRecordEvent.Finalize) {
-                            recording = null
-                            if (keep && !event.hasError()) onFile(file) else file.delete()
-                        }
+    SideEffect {
+        bridge.start = start@{
+            val video = capture ?: return@start
+            if (recording != null) return@start
+            val file = File(context.cacheDir, "take-${System.currentTimeMillis()}.mp4")
+            val options = FileOutputOptions.Builder(file).build()
+            save = false
+            recording = video.output.prepareRecording(context, options)
+                .withAudioEnabled()
+                .start(ContextCompat.getMainExecutor(context)) { event ->
+                    if (event is VideoRecordEvent.Finalize) {
+                        recording = null
+                        bridge.recording = false
+                        if (save && !event.hasError()) onFile(file) else file.delete()
                     }
-            },
-        )
-        Text(
-            "Back",
-            color = Cream,
-            modifier = Modifier.align(Alignment.TopStart).padding(20.dp).clickable {
-                keep = false
-                val active = recording
-                recording = null
-                active?.stop()
-                onCancel()
-            },
-        )
+                }
+            bridge.recording = true
+        }
+        bridge.stop = {
+            save = true
+            recording?.stop()
+        }
+        bridge.abandon = {
+            save = false
+            bridge.recording = false
+            recording?.stop()
+            recording = null
+        }
     }
+
+    AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
 }
 
 @Composable
-private fun AudioCapturePane(enabled: Boolean, onCancel: () -> Unit, onFile: (File) -> Unit) {
+private fun AudioCapturePane(bridge: CaptureBridge, onFile: (File) -> Unit) {
     val context = LocalContext.current
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
-    var startedAt by remember { mutableLongStateOf(0L) }
-    var elapsed by remember { mutableLongStateOf(0L) }
+    var handedOff by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         onDispose {
+            bridge.start = null
+            bridge.stop = null
+            bridge.abandon = null
+            bridge.recording = false
+            val active = recorder
+            recorder = null
             try {
-                recorder?.stop()
+                active?.stop()
             } catch (_: Exception) {
             }
-            recorder?.release()
+            active?.release()
+            if (!handedOff) File(context.cacheDir, "audio-latest.m4a").delete()
         }
     }
 
-    LaunchedEffect(recorder) {
-        while (recorder != null) {
-            elapsed = System.currentTimeMillis() - startedAt
-            delay(200)
-        }
-    }
-
-    Column(
-        Modifier.fillMaxSize().padding(22.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            if (recorder == null) "Ready" else formatElapsed(elapsed),
-            style = androidx.compose.material3.MaterialTheme.typography.headlineLarge,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text("Audio only", color = Muted)
-        Spacer(Modifier.height(36.dp))
-        RecordButton(active = recorder != null, enabled = enabled) {
-            if (recorder != null) {
-                val active = recorder
-                recorder = null
-                val file = active?.let {
-                    try {
-                        it.stop()
-                    } catch (_: Exception) {
-                    }
-                    it.release()
-                    File(context.cacheDir, "audio-latest.m4a")
-                }
-                if (file != null && file.exists()) onFile(file)
-                return@RecordButton
-            }
+    SideEffect {
+        bridge.start = start@{
+            if (recorder != null) return@start
             val file = File(context.cacheDir, "audio-latest.m4a")
             if (file.exists()) file.delete()
             val next = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else MediaRecorder()
@@ -331,32 +358,43 @@ private fun AudioCapturePane(enabled: Boolean, onCancel: () -> Unit, onFile: (Fi
             next.setOutputFile(file.absolutePath)
             next.prepare()
             next.start()
-            startedAt = System.currentTimeMillis()
             recorder = next
+            bridge.recording = true
         }
-        Spacer(Modifier.height(28.dp))
-        Text("Back", color = Muted, modifier = Modifier.clickable {
+        bridge.stop = stop@{
+            val active = recorder ?: return@stop
+            recorder = null
+            handedOff = true
+            bridge.recording = false
             try {
-                recorder?.stop()
+                active.stop()
             } catch (_: Exception) {
             }
-            recorder?.release()
+            active.release()
+            val file = File(context.cacheDir, "audio-latest.m4a")
+            if (file.exists()) onFile(file)
+        }
+        bridge.abandon = {
+            val active = recorder
             recorder = null
-            onCancel()
-        })
+            bridge.recording = false
+            try {
+                active?.stop()
+            } catch (_: Exception) {
+            }
+            active?.release()
+            File(context.cacheDir, "audio-latest.m4a").delete()
+        }
     }
+
+    Box(Modifier.fillMaxSize().background(Ink))
 }
 
 @Composable
-private fun RecordButton(
-    modifier: Modifier = Modifier,
-    active: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
+private fun RecordButton(active: Boolean, enabled: Boolean, onClick: () -> Unit) {
     Box(
-        modifier
-            .size(78.dp)
+        Modifier
+            .size(84.dp)
             .clip(CircleShape)
             .background(if (active) Cream else RecordRed)
             .clickable(enabled = enabled, onClick = onClick),
@@ -364,9 +402,9 @@ private fun RecordButton(
     ) {
         Box(
             Modifier
-                .size(if (active) 28.dp else 54.dp)
-                .clip(if (active) RoundedCornerShape(6.dp) else CircleShape)
-                .background(if (active) RecordRed else Cream.copy(alpha = 0.0f)),
+                .size(if (active) 30.dp else 58.dp)
+                .clip(if (active) RoundedCornerShape(7.dp) else CircleShape)
+                .background(if (active) RecordRed else Cream.copy(alpha = 0f)),
         )
     }
 }
