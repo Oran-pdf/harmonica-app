@@ -154,6 +154,18 @@ class TakeStore(private val context: Context) {
 
     fun thumbnail(uri: String?): Bitmap? = Gallery.thumbnail(context, uri)
 
+    suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+        dirty.remove(id)
+        jobs.remove(id)?.cancel()
+        exportMutex.withLock {
+            val folder = folder(id)
+            val meta = readMeta(folder)
+            Gallery.delete(context, meta?.overlayUri)
+            folder.deleteRecursively()
+        }
+        changesFlow.tryEmit(Unit)
+    }
+
     private suspend fun adopt(id: String, folder: File, source: File): String {
         val info = probeVideo(source.absolutePath)
         if (info.durationMs < 200L) {
@@ -201,6 +213,7 @@ class TakeStore(private val context: Context) {
 
     private suspend fun exportOne(id: String) {
         val folder = folder(id)
+        if (!folder.exists()) return
         val meta = synchronized(this) { readMeta(folder) } ?: return
         val source = File(folder, "source.mp4")
         if (!source.exists()) return
@@ -217,9 +230,17 @@ class TakeStore(private val context: Context) {
             key = meta.key,
             timeline = stamped,
         )
+        if (!folder.exists()) {
+            output.delete()
+            return
+        }
         val uri = Gallery.publish(context, output, meta.title, meta.overlayUri)
         output.delete()
         synchronized(this) {
+            if (!folder.exists()) {
+                Gallery.delete(context, uri.toString())
+                return
+            }
             val fresh = readMeta(folder) ?: meta
             writeMeta(
                 folder,

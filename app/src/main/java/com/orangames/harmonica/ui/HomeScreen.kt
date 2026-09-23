@@ -4,9 +4,11 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +24,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -76,6 +80,13 @@ class LibraryModel(private val store: TakeStore) : ViewModel() {
             }
         }
     }
+
+    fun delete(id: String) {
+        viewModelScope.launch {
+            store.delete(id)
+            takes = store.list()
+        }
+    }
 }
 
 @Composable
@@ -100,6 +111,7 @@ fun HomeScreen(
     LaunchedEffect(store) {
         store.changes.collect { model.refresh() }
     }
+    var pendingDelete by remember { mutableStateOf<Take?>(null) }
 
     Column(
         modifier = Modifier
@@ -134,6 +146,7 @@ fun HomeScreen(
                         store = store,
                         onPlay = { if (take.ready) onPlay(take.id) else onEdit(take.id) },
                         onEdit = { onEdit(take.id) },
+                        onDelete = { pendingDelete = take },
                     )
                 }
             }
@@ -142,6 +155,36 @@ fun HomeScreen(
             Spacer(Modifier.height(18.dp))
             Text(model.busy ?: "", color = Cream)
         }
+    }
+
+    pendingDelete?.let { take ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete this video?") },
+            text = {
+                Text(
+                    "“${take.title}” will leave the list and the phone’s gallery.",
+                    color = Muted,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        model.delete(take.id)
+                        pendingDelete = null
+                    },
+                ) {
+                    Text("Delete", color = RecordRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) {
+                    Text("Keep", color = Cream)
+                }
+            },
+            containerColor = CardBrown,
+            titleContentColor = Cream,
+        )
     }
 }
 
@@ -159,8 +202,15 @@ private fun ActionButton(label: String, modifier: Modifier = Modifier, onClick: 
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TakeRow(take: Take, store: TakeStore, onPlay: () -> Unit, onEdit: () -> Unit) {
+private fun TakeRow(
+    take: Take,
+    store: TakeStore,
+    onPlay: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
     var thumb by remember(take.overlayUri) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(take.overlayUri) {
         thumb = store.thumbnail(take.overlayUri)
@@ -170,7 +220,7 @@ private fun TakeRow(take: Take, store: TakeStore, onPlay: () -> Unit, onEdit: ()
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(CardBrown)
-            .clickable(onClick = onPlay)
+            .combinedClickable(onClick = onPlay, onLongClick = onDelete)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

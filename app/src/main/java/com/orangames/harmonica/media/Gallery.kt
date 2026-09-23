@@ -32,6 +32,19 @@ object Gallery {
         }
     }
 
+    fun delete(context: Context, uriString: String?) {
+        if (uriString.isNullOrBlank()) return
+        val uri = Uri.parse(uriString)
+        try {
+            if (uri.scheme == "file") {
+                uri.path?.let { File(it).delete() }
+            } else {
+                context.contentResolver.delete(uri, null, null)
+            }
+        } catch (_: Exception) {
+        }
+    }
+
     fun thumbnail(context: Context, uriString: String?): Bitmap? {
         if (uriString.isNullOrBlank()) return null
         val retriever = MediaMetadataRetriever()
