@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
@@ -102,6 +103,7 @@ fun HomeScreen(
     model: LibraryModel,
     store: TakeStore,
     onRecord: () -> Unit,
+    onDesigns: () -> Unit,
     onPlay: (String) -> Unit,
     onEdit: (String) -> Unit,
 ) {
@@ -141,6 +143,8 @@ fun HomeScreen(
             QuietAction("Upload", Icons.Filled.FileUpload, { pickVideo.launch("video/*") }, Modifier.weight(1f))
             PrimaryAction("Record", Icons.Filled.Videocam, onRecord, Modifier.weight(1f))
         }
+        Spacer(Modifier.height(12.dp))
+        QuietAction("Designs", Icons.Filled.Palette, onDesigns, Modifier.fillMaxWidth())
         model.message?.let {
             Spacer(Modifier.height(14.dp))
             Text(it, color = Amber, style = MaterialTheme.typography.bodyMedium)

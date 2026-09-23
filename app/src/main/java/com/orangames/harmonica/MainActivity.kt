@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.orangames.harmonica.ui.DesignsScreen
 import com.orangames.harmonica.ui.EditorModel
 import com.orangames.harmonica.ui.EditorModelFactory
 import com.orangames.harmonica.ui.EditorScreen
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
 private sealed interface Screen {
     data object Home : Screen
     data object Record : Screen
+    data object Designs : Screen
     data class Play(val id: String) : Screen
     data class Edit(val id: String) : Screen
 }
@@ -83,10 +85,12 @@ private fun AppNav(store: com.orangames.harmonica.data.TakeStore, library: Libra
             model = library,
             store = store,
             onRecord = { push(Screen.Record) },
+            onDesigns = { push(Screen.Designs) },
             onPlay = { push(Screen.Play(it)) },
             onEdit = { push(Screen.Edit(it)) },
         )
         Screen.Record -> RecordScreen(store = store, onBack = { pop() }, onDone = { pop() })
+        Screen.Designs -> DesignsScreen(onBack = { pop() })
         is Screen.Play -> PlayerScreen(
             store = store,
             id = screen.id,
