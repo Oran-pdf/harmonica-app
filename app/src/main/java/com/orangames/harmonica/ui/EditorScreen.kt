@@ -2,7 +2,6 @@ package com.orangames.harmonica.ui
 
 import android.net.Uri
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -43,7 +42,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -65,11 +66,12 @@ import com.orangames.harmonica.data.HARP_KEYS
 import com.orangames.harmonica.data.HoleMark
 import com.orangames.harmonica.data.Take
 import com.orangames.harmonica.data.TakeStore
+import com.orangames.harmonica.data.SchemeStore
 import com.orangames.harmonica.data.Timeline
 import com.orangames.harmonica.HarmonicaAppHolder
 import com.orangames.harmonica.data.frameAt
 import com.orangames.harmonica.data.frameToMs
-import com.orangames.harmonica.media.HudPainter
+import com.orangames.harmonica.media.SchemePainter
 import com.orangames.harmonica.media.measureHud
 import kotlin.math.abs
 import kotlin.math.min
@@ -204,7 +206,8 @@ fun EditorScreen(model: EditorModel, onBack: () -> Unit) {
         HarmonicaOverlay(
             take = take,
             keyName = model.harpKey,
-            marks = model.frames[frameAt(model.positionMs, take.fps, take.frameCount)],
+            timeSec = model.positionMs / 1000.0,
+            frames = model.frames,
             onToggle = { above, hole, bend ->
                 player.pause()
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -245,20 +248,20 @@ fun EditorScreen(model: EditorModel, onBack: () -> Unit) {
 private fun HarmonicaOverlay(
     take: Take,
     keyName: String,
-    marks: FrameMarks?,
+    timeSec: Double,
+    frames: Map<Int, FrameMarks>,
     onToggle: (Boolean, Int, Int) -> Unit,
     onKey: () -> Unit,
 ) {
     val layout = remember(take.width) { measureHud(take.width) }
-    val bitmap = remember(take.width, keyName, marks) {
-        HudPainter.barBitmap(take.width, keyName, marks).asImageBitmap()
-    }
+    val look = SchemeStore.selected
+    val events = Timeline.fromFrames(keyName, frames, take.fps, take.frameCount).events
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val viewW = constraints.maxWidth.toFloat()
         val viewH = constraints.maxHeight.toFloat()
-        val scale = min(viewW / take.width, viewH / take.height)
-        val fittedW = take.width * scale
-        val fittedH = take.height * scale
+        val fit = min(viewW / take.width, viewH / take.height)
+        val fittedW = take.width * fit
+        val fittedH = take.height * fit
         val left = (viewW - fittedW) / 2f
         val top = (viewH - fittedH) / 2f
         val hudScale = fittedW / take.width
@@ -267,9 +270,7 @@ private fun HarmonicaOverlay(
         val hudLeft = left + (fittedW - hudW) / 2f
         val limit = top + fittedH - hudH - 8f
         val hudTop = (top + fittedH * 0.18f).coerceIn(top + 8f, maxOf(top + 8f, limit))
-        Image(
-            bitmap = bitmap,
-            contentDescription = "Harmonica",
+        Canvas(
             modifier = Modifier
                 .offset { IntOffset(hudLeft.roundToInt(), hudTop.roundToInt()) }
                 .size(
@@ -296,7 +297,23 @@ private fun HarmonicaOverlay(
                         }
                     }
                 },
-        )
+        ) {
+            val drawn = size.width / layout.width
+            scale(drawn, drawn, Offset.Zero) {
+                drawIntoCanvas { canvas ->
+                    SchemePainter.draw(
+                        canvas.nativeCanvas,
+                        layout,
+                        0f,
+                        0f,
+                        keyName,
+                        timeSec,
+                        events,
+                        look,
+                    )
+                }
+            }
+        }
     }
 }
 

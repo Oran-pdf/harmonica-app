@@ -22,7 +22,8 @@ import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
 import com.google.common.collect.ImmutableList
-import com.orangames.harmonica.data.FrameMarks
+import com.orangames.harmonica.data.Look
+import com.orangames.harmonica.data.SchemeStore
 import com.orangames.harmonica.data.TimelineDoc
 import java.io.File
 import kotlin.coroutines.resume
@@ -41,8 +42,9 @@ object VideoExport {
         fps: Double,
         key: String,
         timeline: TimelineDoc,
+        look: Look = SchemeStore.selected,
     ) {
-        val overlay = HudFrameOverlay(videoW, videoH, fps, key, timeline)
+        val overlay = HudFrameOverlay(videoW, videoH, fps, key, timeline, look)
         val effects = Effects(
             emptyList(),
             listOf<Effect>(OverlayEffect(ImmutableList.of(overlay))),
@@ -142,6 +144,7 @@ private class HudFrameOverlay(
     private val fps: Double,
     private val key: String,
     private val timeline: TimelineDoc,
+    private val look: Look,
 ) : BitmapOverlay() {
     private val bitmap = Bitmap.createBitmap(
         videoW.coerceAtLeast(2),
@@ -150,22 +153,15 @@ private class HudFrameOverlay(
     )
     private val canvas = Canvas(bitmap)
     private var cachedKey: Int = Int.MIN_VALUE
-    private var cached: FrameMarks? = null
 
     override fun getBitmap(presentationTimeUs: Long): Bitmap {
         val frame = ((presentationTimeUs / 1_000_000.0) * fps).toInt()
         if (frame != cachedKey) {
             cachedKey = frame
-            cached = marksAt(frame)
             bitmap.eraseColor(Color.TRANSPARENT)
-            HudPainter.drawOnFrame(canvas, bitmap.width, bitmap.height, key, cached)
+            val time = presentationTimeUs / 1_000_000.0
+            SchemePainter.drawOnFrame(canvas, bitmap.width, bitmap.height, key, time, timeline.events, look)
         }
         return bitmap
-    }
-
-    private fun marksAt(frame: Int): FrameMarks? {
-        val time = frame / fps
-        val event = timeline.events.firstOrNull { time >= it.t0 && time < it.t1 } ?: return null
-        return FrameMarks(event.breath, event.holes)
     }
 }
