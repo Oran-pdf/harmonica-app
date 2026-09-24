@@ -332,12 +332,17 @@ object SchemePainter {
                 if (run.isEmpty()) return
                 val xs = run.map { ox + it.cx }
                 val cy = oy + run.map { it.cy }.average().toFloat()
-                val cx = (xs.min() + xs.max()) / 2f
-                val halfX = layout.sq / 2f + (xs.max() - xs.min()) / 2f + 2f
-                val halfY = layout.sq / 2f + 1f
                 val scale = bodyScale(look.motion, enter, exit, active)
                 val alpha = bodyAlpha(look.motion, enter, exit, active, time, run.first().hole)
-                drawLit(canvas, cx, cy, halfX * scale, halfY * scale, run.first().above, look.lit, alpha)
+                if (look.lit in 1..5 && run.size >= 2) {
+                    val radius = (layout.sq / 2f + 1f) * scale
+                    drawLitCapsule(canvas, xs.min(), xs.max(), cy, radius, run.first().above, look.lit, alpha)
+                } else {
+                    val cx = (xs.min() + xs.max()) / 2f
+                    val halfX = layout.sq / 2f + (xs.max() - xs.min()) / 2f + 2f
+                    val halfY = layout.sq / 2f + 1f
+                    drawLit(canvas, cx, cy, halfX * scale, halfY * scale, run.first().above, look.lit, alpha)
+                }
                 run.clear()
             }
             for (hit in sorted) {
@@ -441,6 +446,70 @@ object SchemePainter {
                 canvas.drawOval(oval, paint)
             }
         }
+    }
+
+    private fun drawLitCapsule(
+        canvas: Canvas,
+        leftCx: Float,
+        rightCx: Float,
+        cy: Float,
+        radius: Float,
+        above: Boolean,
+        lit: Int,
+        alpha: Float,
+    ) {
+        if (alpha <= 0.02f || radius <= 0f) return
+        val color = if (above) BLOW else DRAW
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        fun blob(r: Float, c: Int) {
+            paint.shader = null
+            paint.style = Paint.Style.FILL
+            paint.color = c
+            canvas.drawPath(capsulePath(leftCx, rightCx, cy, r), paint)
+        }
+        when (lit) {
+            1 -> {
+                blob(radius * 1.7f, withAlpha(color, 0.28f * alpha))
+                blob(radius, withAlpha(color, alpha))
+            }
+            2 -> {
+                blob(radius * 1.45f, withAlpha(0xFFFFE7A8.toInt(), 0.35f * alpha))
+                blob(radius, withAlpha(color, alpha))
+                paint.color = withAlpha(Color.WHITE, 0.75f * alpha)
+                canvas.drawCircle(leftCx - radius * 0.2f, cy - radius * 0.25f, radius * 0.28f, paint)
+            }
+            3 -> {
+                blob(radius * 1.15f, withAlpha(color, 0.3f * alpha))
+                blob(radius, withAlpha(color, alpha))
+            }
+            4 -> {
+                blob(radius * 1.1f, withAlpha(color, 0.4f * alpha))
+                blob(radius, withAlpha(color, alpha))
+                paint.color = withAlpha(Color.WHITE, 0.8f * alpha)
+                canvas.drawCircle(leftCx - radius * 0.25f, cy - radius * 0.28f, radius * 0.22f, paint)
+            }
+            else -> {
+                paint.shader = LinearGradient(
+                    leftCx, cy, rightCx, cy,
+                    intArrayOf(withAlpha(Color.WHITE, alpha), withAlpha(color, alpha), withAlpha(Color.WHITE, alpha)),
+                    floatArrayOf(0f, 0.5f, 1f),
+                    Shader.TileMode.CLAMP,
+                )
+                paint.style = Paint.Style.FILL
+                canvas.drawPath(capsulePath(leftCx, rightCx, cy, radius), paint)
+            }
+        }
+    }
+
+    private fun capsulePath(leftCx: Float, rightCx: Float, cy: Float, radius: Float): Path {
+        val path = Path()
+        path.moveTo(leftCx, cy - radius)
+        path.lineTo(rightCx, cy - radius)
+        path.arcTo(RectF(rightCx - radius, cy - radius, rightCx + radius, cy + radius), -90f, 180f, false)
+        path.lineTo(leftCx, cy + radius)
+        path.arcTo(RectF(leftCx - radius, cy - radius, leftCx + radius, cy + radius), 90f, 180f, false)
+        path.close()
+        return path
     }
 
     private fun drawMotion(
