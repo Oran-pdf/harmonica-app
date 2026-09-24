@@ -12,8 +12,8 @@ android {
         applicationId = "com.orangames.harmonica"
         minSdk = 26
         targetSdk = 34
-        versionCode = 14
-        versionName = "1.13.0"
+        versionCode = 15
+        versionName = "1.14.0"
         ndk {
             abiFilters += listOf("arm64-v8a")
         }

@@ -21,7 +21,7 @@ data class Look(
 )
 
 object Looks {
-    val harps = listOf("Plain", "Brass", "Wood", "Paper", "Stage", "Glass", "Copper", "Midnight", "Studio")
+    val harps = listOf("Plain", "Brass", "Wood", "Paper", "Stage", "Glass", "Copper", "Midnight")
     val lits = listOf("Flat", "Glow", "Flame", "Ink", "Orb", "Shine", "Ring", "Spark")
     val idles = listOf("Squares", "Dim", "Rings", "Dents", "Paper", "Pinholes", "Dashes", "Hidden")
     val motions = listOf("Snap", "Shatter", "Rise", "Splatter", "Burst", "Drops", "Fade", "Pop")

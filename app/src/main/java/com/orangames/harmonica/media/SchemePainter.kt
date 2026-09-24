@@ -66,11 +66,9 @@ object SchemePainter {
             if (time < event.t0 || time >= event.t1) continue
             for (hit in hits(layout, event)) litIds.add(idOf(hit))
         }
-        if (shown.harp != 8) {
-            for (hit in layout.squares) {
-                if (idOf(hit) in litIds) continue
-                drawIdle(canvas, ox + hit.cx, oy + hit.cy, hit.half, shown.idle, shown.harp)
-            }
+        for (hit in layout.squares) {
+            if (idOf(hit) in litIds) continue
+            drawIdle(canvas, ox + hit.cx, oy + hit.cy, hit.half, shown.idle, shown.harp)
         }
         for (event in events) {
             val age = time - event.t0
@@ -231,10 +229,6 @@ object SchemePainter {
             5 -> paint.color = 0x66FFFFFF
             6 -> paint.shader = LinearGradient(bar.left, bar.top, bar.left, bar.bottom, 0xFF8C3E24.toInt(), 0xFFE7A070.toInt(), Shader.TileMode.CLAMP)
             7 -> paint.shader = LinearGradient(bar.left, bar.top, bar.left, bar.bottom, 0xFF243044.toInt(), 0xFF101826.toInt(), Shader.TileMode.CLAMP)
-            8 -> {
-                drawStudio(canvas, layout, ox, oy, key, bar)
-                return
-            }
             else -> paint.color = 0xFFA67C3E.toInt()
         }
         canvas.drawRoundRect(bar, radius, radius, paint)
@@ -272,73 +266,6 @@ object SchemePainter {
         val fm = text.fontMetrics
         val ty = (bar.top + bar.bottom) / 2f - (fm.ascent + fm.descent) / 2f
         for (i in labels.indices) canvas.drawText(labels[i], ox + centers[i], ty, text)
-    }
-
-    private fun drawStudio(canvas: Canvas, layout: HudLayout, ox: Float, oy: Float, key: String, comb: RectF) {
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        val plateH = comb.height() * 0.7f
-        val inset = comb.height() * 0.15f
-        val top = RectF(comb.left + inset, comb.top - plateH, comb.right - inset, comb.top + comb.height() * 0.12f)
-        val bottom = RectF(comb.left + inset, comb.bottom - comb.height() * 0.12f, comb.right - inset, comb.bottom + plateH)
-        val end = plateH / 2f
-        paint.shader = LinearGradient(top.left, top.top, top.left, top.bottom, 0xFF9AA3AE.toInt(), 0xFFF4F7FB.toInt(), Shader.TileMode.CLAMP)
-        canvas.drawRoundRect(top, end, end, paint)
-        paint.shader = LinearGradient(bottom.left, bottom.top, bottom.left, bottom.bottom, 0xFFE7EDF3.toInt(), 0xFF7E8792.toInt(), Shader.TileMode.CLAMP)
-        canvas.drawRoundRect(bottom, end, end, paint)
-        paint.shader = null
-        paint.color = 0xFF5C4630.toInt()
-        val screw = comb.height() * 0.11f
-        canvas.drawCircle(top.left + end, (top.top + top.bottom) / 2f, screw, paint)
-        canvas.drawCircle(top.right - end, (top.top + top.bottom) / 2f, screw, paint)
-        canvas.drawCircle(bottom.left + end, (bottom.top + bottom.bottom) / 2f, screw, paint)
-        canvas.drawCircle(bottom.right - end, (bottom.top + bottom.bottom) / 2f, screw, paint)
-        paint.shader = LinearGradient(comb.left, comb.top, comb.left, comb.bottom, 0xFF8A5A32.toInt(), 0xFF4A2E18.toInt(), Shader.TileMode.CLAMP)
-        canvas.drawRoundRect(comb, comb.height() * 0.18f, comb.height() * 0.18f, paint)
-        paint.shader = null
-        paint.color = 0xFF1A120C.toInt()
-        val holeW = layout.cellW * 0.34f
-        val holeH = comb.height() * 0.34f
-        val holeY = (comb.top + comb.bottom) / 2f
-        for (cx in layout.holeX) {
-            canvas.drawRoundRect(RectF(ox + cx - holeW, holeY - holeH, ox + cx + holeW, holeY + holeH), holeH, holeH, paint)
-        }
-        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFF3E6D4.toInt()
-            textAlign = Paint.Align.CENTER
-            textSize = max(11f, layout.sq * 0.72f)
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-        }
-        val labels = ArrayList<String>(11)
-        labels.add(key)
-        for (n in 1..10) labels.add(if (n < 10) n.toString() else "0")
-        val centers = FloatArray(11)
-        centers[0] = layout.keyCx
-        layout.holeX.copyInto(centers, 1)
-        val fm = text.fontMetrics
-        val ty = holeY - holeH - (fm.ascent + fm.descent) / 2f - 2f
-        for (i in labels.indices) canvas.drawText(labels[i], ox + centers[i], ty, text)
-    }
-
-    private fun drawStudioMark(canvas: Canvas, cx: Float, cy: Float, half: Float, above: Boolean, alpha: Float) {
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        if (above) {
-            val path = Path()
-            path.moveTo(cx, cy - half)
-            path.lineTo(cx + half * 0.62f, cy + half * 0.05f)
-            path.lineTo(cx + half * 0.2f, cy + half * 0.05f)
-            path.lineTo(cx + half * 0.2f, cy + half)
-            path.lineTo(cx - half * 0.2f, cy + half)
-            path.lineTo(cx - half * 0.2f, cy + half * 0.05f)
-            path.lineTo(cx - half * 0.62f, cy + half * 0.05f)
-            path.close()
-            paint.color = withAlpha(0xFFE10600.toInt(), alpha)
-            canvas.drawPath(path, paint)
-        } else {
-            paint.color = withAlpha(0xFF3DDC6A.toInt(), 0.35f * alpha)
-            canvas.drawCircle(cx, cy, half * 0.85f, paint)
-            paint.color = withAlpha(0xFF7CFF6A.toInt(), alpha)
-            canvas.drawCircle(cx, cy, half * 0.48f, paint)
-        }
     }
 
     private fun drawIdle(canvas: Canvas, x: Float, y: Float, half: Float, idle: Int, harp: Int) {
@@ -407,12 +334,7 @@ object SchemePainter {
                 val cy = oy + run.map { it.cy }.average().toFloat()
                 val scale = bodyScale(look.motion, enter, exit, active)
                 val alpha = bodyAlpha(look.motion, enter, exit, active, time, run.first().hole)
-                if (look.harp == 8) {
-                    val radius = (layout.sq / 2f) * scale
-                    for (hit in run) {
-                        drawStudioMark(canvas, ox + hit.cx, oy + hit.cy, radius, hit.above, alpha)
-                    }
-                } else if (look.lit in 1..5 && run.size >= 2) {
+                if (look.lit in 1..5 && run.size >= 2) {
                     val radius = (layout.sq / 2f + 1f) * scale
                     drawLitCapsule(canvas, xs.min(), xs.max(), cy, radius, run.first().above, look.lit, alpha)
                 } else {

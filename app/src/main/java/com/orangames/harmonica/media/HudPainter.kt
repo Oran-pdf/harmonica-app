@@ -109,6 +109,15 @@ object HudPainter {
         val pillBot = oy + innerBelow.maxOf { it.cy } + layout.sq / 2f + pad
         val pillLeft = ox + layout.holeX[0] - layout.cellW * 0.78f
         val pillRight = ox + layout.holeX[9] + layout.cellW * 0.78f
+        val bar = RectF(ox + 4f, oy + layout.barTop, ox + layout.width - 5f, oy + layout.barBottom)
+        val wedge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = BROWN
+            style = Paint.Style.FILL
+        }
+        val tuck = (pillRight - pillLeft) * 0.12f
+        drawCap(canvas, wedge, pillLeft + tuck, bar.left, bar.left + (bar.right - bar.left) * 0.07f, bar.top, bar.top - pillTop)
+        drawCap(canvas, wedge, pillRight - tuck, bar.right - (bar.right - bar.left) * 0.07f, bar.right, bar.top, bar.top - pillTop)
+
         val pill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BLUE }
         val radius = (pillBot - pillTop) / 2f
         canvas.drawRoundRect(RectF(pillLeft, pillTop, pillRight, pillBot), radius, radius, pill)
@@ -117,19 +126,11 @@ object HudPainter {
             color = BROWN
             style = Paint.Style.FILL
         }
-        val bar = RectF(ox + 4f, oy + layout.barTop, ox + layout.width - 5f, oy + layout.barBottom)
         canvas.drawRoundRect(bar, 2f, 2f, barPaint)
         barPaint.style = Paint.Style.STROKE
-        barPaint.strokeWidth = 2f
+        barPaint.strokeWidth = max(2f, (bar.bottom - bar.top) * 0.045f)
         barPaint.color = BAR_EDGE
         canvas.drawRoundRect(bar, 2f, 2f, barPaint)
-        barPaint.style = Paint.Style.FILL
-        barPaint.color = BROWN
-        val triH = (bar.bottom - bar.top) * 0.36f
-        val base = (bar.right - bar.left) * 0.042f
-        val inset = (bar.right - bar.left) * 0.012f
-        drawCap(canvas, barPaint, pillLeft, bar.left + inset, bar.left + inset + base, bar.top, triH)
-        drawCap(canvas, barPaint, pillRight, bar.right - inset - base, bar.right - inset, bar.top, triH)
 
         val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
@@ -228,8 +229,8 @@ object HudPainter {
     ) {
         val path = Path()
         path.moveTo(apexX, barTop - triH)
-        path.lineTo(baseLeft, barTop + 1f)
-        path.lineTo(baseRight, barTop + 1f)
+        path.lineTo(baseLeft, barTop)
+        path.lineTo(baseRight, barTop)
         path.close()
         canvas.drawPath(path, paint)
     }
