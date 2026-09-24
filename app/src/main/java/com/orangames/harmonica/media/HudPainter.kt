@@ -70,15 +70,13 @@ fun measureHud(videoW: Int): HudLayout {
 }
 
 object HudPainter {
-    private const val BLUE = 0xEB3AA8FF.toInt()
-    private const val BROWN = 0xFFA67C3E.toInt()
-    private const val BAR_EDGE = 0xFFF5F5F5.toInt()
-    private const val CELL_BG = 0xFF0C0C0C.toInt()
-    private const val NUMBER = 0xFFD2D2D2.toInt()
-    private const val ABOVE = 0xFFFF3434.toInt()
-    private const val ABOVE_EDGE = 0xFF961212.toInt()
-    private const val BELOW = 0xFF46FF50.toInt()
-    private const val BELOW_EDGE = 0xFF148C1E.toInt()
+    private const val BLUE = 0xFF0863FD.toInt()
+    private const val BROWN = 0xFFA65E36.toInt()
+    private const val BAR_EDGE = 0xFFFFFFFF.toInt()
+    private const val CELL_BG = 0xFF000000.toInt()
+    private const val NUMBER = 0xFFE6E6E6.toInt()
+    private const val ABOVE = 0xFFFF4343.toInt()
+    private const val BELOW = 0xFF1DD81E.toInt()
 
     fun barBitmap(videoW: Int, key: String, marks: FrameMarks?): Bitmap {
         val layout = measureHud(videoW)
@@ -90,8 +88,7 @@ object HudPainter {
     fun drawOnFrame(canvas: Canvas, videoW: Int, videoH: Int, key: String, marks: FrameMarks?) {
         val layout = measureHud(videoW)
         val x = (videoW - layout.width) / 2f
-        val limit = (videoH - layout.height - 8).toFloat()
-        val y = (videoH * 0.18f).coerceIn(8f, max(8f, limit))
+        val y = ((videoH - layout.height) / 2f).coerceAtLeast(8f)
         drawHud(canvas, layout, x, y, key, marks)
     }
 
@@ -103,13 +100,16 @@ object HudPainter {
         key: String,
         marks: FrameMarks?,
     ) {
-        val firstAbove = layout.squares.filter { it.above }.minOf { it.cy }
-        val firstBelow = layout.squares.filter { !it.above }.maxOf { it.cy }
-        val pillTop = oy + firstAbove - layout.sq / 2f - 6f
-        val pillBot = oy + firstBelow + layout.sq / 2f + 6f
+        val innerAbove = layout.squares.filter { it.above && it.bend == 0 }
+        val innerBelow = layout.squares.filter { !it.above && it.bend == 0 }
+        val pad = layout.gap * 0.45f
+        val pillTop = oy + innerAbove.minOf { it.cy } - layout.sq / 2f - pad
+        val pillBot = oy + innerBelow.maxOf { it.cy } + layout.sq / 2f + pad
+        val pillLeft = ox + layout.holeX[0] - layout.cellW * 0.78f
+        val pillRight = ox + layout.holeX[9] + layout.cellW * 0.78f
         val pill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BLUE }
         val radius = (pillBot - pillTop) / 2f
-        canvas.drawRoundRect(RectF(ox + 2f, pillTop, ox + layout.width - 3f, pillBot), radius, radius, pill)
+        canvas.drawRoundRect(RectF(pillLeft, pillTop, pillRight, pillBot), radius, radius, pill)
 
         val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = BROWN
@@ -156,9 +156,9 @@ object HudPainter {
 
         val square = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
         val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF141414.toInt()
+            color = Color.BLACK
             style = Paint.Style.STROKE
-            strokeWidth = 1f
+            strokeWidth = max(2f, layout.sq * 0.06f)
         }
         for (hit in layout.squares) {
             val box = RectF(
@@ -194,7 +194,7 @@ object HudPainter {
                 val halfY = layout.sq / 2f + 1f
                 val above = keyPair.first
                 fill.color = if (above) ABOVE else BELOW
-                stroke.color = if (above) ABOVE_EDGE else BELOW_EDGE
+                stroke.color = Color.BLACK
                 val oval = RectF(cx - halfX, cy - halfY, cx + halfX, cy + halfY)
                 canvas.drawOval(oval, fill)
                 canvas.drawOval(oval, stroke)

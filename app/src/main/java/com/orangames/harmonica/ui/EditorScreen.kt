@@ -269,7 +269,11 @@ private fun HarmonicaOverlay(
         val hudH = layout.height * hudScale
         val hudLeft = left + (fittedW - hudW) / 2f
         val limit = top + fittedH - hudH - 8f
-        val hudTop = (top + fittedH * 0.18f).coerceIn(top + 8f, maxOf(top + 8f, limit))
+        val hudTop = if (look.id == "simple") {
+            top + (fittedH - hudH) / 2f
+        } else {
+            (top + fittedH * 0.18f).coerceIn(top + 8f, maxOf(top + 8f, limit))
+        }
         Canvas(
             modifier = Modifier
                 .offset { IntOffset(hudLeft.roundToInt(), hudTop.roundToInt()) }
