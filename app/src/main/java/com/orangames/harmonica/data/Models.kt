@@ -93,7 +93,7 @@ fun formatClock(ms: Long): String {
 }
 
 fun frameAt(positionMs: Long, fps: Double, frameCount: Int): Int {
-    return ((positionMs / 1000.0) * fps).roundToInt().coerceIn(0, frameCount - 1)
+    return ((positionMs / 1000.0) * fps).toInt().coerceIn(0, frameCount - 1)
 }
 
 fun frameToMs(frame: Int, fps: Double): Long {

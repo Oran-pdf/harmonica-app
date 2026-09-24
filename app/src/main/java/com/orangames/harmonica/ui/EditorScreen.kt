@@ -296,7 +296,9 @@ private fun HarmonicaOverlay(
                             val dy = y - sq.cy
                             dx * dx + dy * dy
                         } ?: return@detectTapGestures
-                        if (abs(x - hit.cx) <= hit.half + layout.gap && abs(y - hit.cy) <= hit.half + layout.gap) {
+                        val reachX = layout.cellW * 0.62f
+                        val reachY = (layout.sq + layout.gap) * 0.62f
+                        if (abs(x - hit.cx) <= reachX && abs(y - hit.cy) <= reachY) {
                             onToggle(hit.above, hit.hole, hit.bend)
                         }
                     }
