@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import com.orangames.harmonica.data.FrameMarks
@@ -38,8 +39,9 @@ private val BELOW_COUNTS = intArrayOf(2, 3, 4, 2, 1, 2, 1, 1, 1, 1)
 fun measureHud(videoW: Int): HudLayout {
     val width = min(videoW, max(280, (videoW * 0.94f).toInt())).coerceAtLeast(160)
     val cols = 11
+    val slots = 12
     val gap = max(2, width / 140).toFloat()
-    val cell = (width - gap * (cols + 1)) / cols
+    val cell = (width - gap * (slots + 1)) / slots
     val sq = max(12f, cell * 0.62f)
     val barH = max(28f, cell * 0.95f)
     val maxAbove = 3
@@ -116,11 +118,18 @@ object HudPainter {
             style = Paint.Style.FILL
         }
         val bar = RectF(ox + 4f, oy + layout.barTop, ox + layout.width - 5f, oy + layout.barBottom)
-        canvas.drawRoundRect(bar, 6f, 6f, barPaint)
+        canvas.drawRoundRect(bar, 2f, 2f, barPaint)
         barPaint.style = Paint.Style.STROKE
         barPaint.strokeWidth = 2f
         barPaint.color = BAR_EDGE
-        canvas.drawRoundRect(bar, 6f, 6f, barPaint)
+        canvas.drawRoundRect(bar, 2f, 2f, barPaint)
+        barPaint.style = Paint.Style.FILL
+        barPaint.color = BROWN
+        val triH = (bar.bottom - bar.top) * 0.36f
+        val base = (bar.right - bar.left) * 0.042f
+        val inset = (bar.right - bar.left) * 0.012f
+        drawCap(canvas, barPaint, pillLeft, bar.left + inset, bar.left + inset + base, bar.top, triH)
+        drawCap(canvas, barPaint, pillRight, bar.right - inset - base, bar.right - inset, bar.top, triH)
 
         val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
@@ -206,5 +215,22 @@ object HudPainter {
             }
             flush()
         }
+    }
+
+    private fun drawCap(
+        canvas: Canvas,
+        paint: Paint,
+        apexX: Float,
+        baseLeft: Float,
+        baseRight: Float,
+        barTop: Float,
+        triH: Float,
+    ) {
+        val path = Path()
+        path.moveTo(apexX, barTop - triH)
+        path.lineTo(baseLeft, barTop + 1f)
+        path.lineTo(baseRight, barTop + 1f)
+        path.close()
+        canvas.drawPath(path, paint)
     }
 }
