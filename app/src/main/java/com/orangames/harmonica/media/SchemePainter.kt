@@ -123,13 +123,13 @@ object SchemePainter {
         canvas.clipPath(clip)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         when (kind) {
-            0 -> aurora(canvas, paint, left, top, right, bottom)
-            1 -> ember(canvas, paint, left, top, right, bottom)
-            2 -> lagoon(canvas, paint, left, top, right, bottom)
-            3 -> dusk(canvas, paint, left, top, right, bottom)
-            4 -> mosaic(canvas, paint, left, top, right, bottom)
-            5 -> neon(canvas, paint, cx, cy, w, h)
-            6 -> garden(canvas, paint, cx, cy, w, h)
+            0 -> parchment(canvas, paint, left, top, right, bottom)
+            1 -> smoke(canvas, paint, left, top, right, bottom)
+            2 -> walnut(canvas, paint, left, top, right, bottom)
+            3 -> mist(canvas, paint, left, top, right, bottom)
+            4 -> velvet(canvas, paint, left, top, right, bottom)
+            5 -> aurora(canvas, paint, left, top, right, bottom)
+            6 -> ember(canvas, paint, left, top, right, bottom)
             else -> festival(canvas, paint, cx, cy, w, h)
         }
         canvas.restore()
@@ -140,6 +140,37 @@ object SchemePainter {
         paint.style = Paint.Style.FILL
         paint.color = color
         canvas.drawOval(rect, paint)
+    }
+
+    private fun softWash(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float, topColor: Int, bottomColor: Int, glow: Int) {
+        paint.shader = LinearGradient(left, top, left, bottom, topColor, bottomColor, Shader.TileMode.CLAMP)
+        paint.style = Paint.Style.FILL
+        canvas.drawRect(left, top, right, bottom, paint)
+        paint.shader = null
+        paint.color = glow
+        val w = right - left
+        val h = bottom - top
+        canvas.drawOval(RectF(left + w * 0.18f, top + h * 0.22f, right - w * 0.12f, bottom - h * 0.18f), paint)
+    }
+
+    private fun parchment(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
+        softWash(canvas, paint, left, top, right, bottom, 0xD8E6D2B4.toInt(), 0xC8B89A72.toInt(), 0x44C4A57A.toInt())
+    }
+
+    private fun smoke(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
+        softWash(canvas, paint, left, top, right, bottom, 0xC83A342E.toInt(), 0xC0161310.toInt(), 0x335C534A.toInt())
+    }
+
+    private fun walnut(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
+        softWash(canvas, paint, left, top, right, bottom, 0xD86A4630.toInt(), 0xC8322016.toInt(), 0x44C4A07A.toInt())
+    }
+
+    private fun mist(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
+        softWash(canvas, paint, left, top, right, bottom, 0xC8D4D6DA.toInt(), 0xB8A8B0B6.toInt(), 0x33586870.toInt())
+    }
+
+    private fun velvet(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
+        softWash(canvas, paint, left, top, right, bottom, 0xD84A3430.toInt(), 0xC21A1210.toInt(), 0x33684840.toInt())
     }
 
     private fun aurora(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
@@ -155,79 +186,6 @@ object SchemePainter {
         fill(canvas, paint, 0xE6C4232A.toInt(), RectF(left, top + h * 0.2f, left + w * 0.7f, bottom))
         fill(canvas, paint, 0xEEF06A22.toInt(), RectF(left + w * 0.28f, top, right, top + h * 0.75f))
         fill(canvas, paint, 0xEEF6C14A.toInt(), RectF(left + w * 0.4f, top + h * 0.35f, right, bottom))
-    }
-
-    private fun lagoon(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
-        val w = right - left
-        val h = bottom - top
-        fill(canvas, paint, 0xE0143D73.toInt(), RectF(left, top + h * 0.12f, right, bottom))
-        fill(canvas, paint, 0xE01EC8B8.toInt(), RectF(left + w * 0.2f, top, left + w * 0.85f, top + h * 0.7f))
-        fill(canvas, paint, 0xCC7CFF6B.toInt(), RectF(left, top + h * 0.45f, left + w * 0.55f, bottom))
-    }
-
-    private fun dusk(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
-        val w = right - left
-        val h = bottom - top
-        fill(canvas, paint, 0xE62A1458.toInt(), RectF(left, top, right, bottom))
-        fill(canvas, paint, 0xDDE23A8C.toInt(), RectF(left + w * 0.25f, top + h * 0.05f, right, top + h * 0.7f))
-        fill(canvas, paint, 0xEEF2B84B.toInt(), RectF(left + w * 0.15f, top + h * 0.42f, left + w * 0.72f, bottom))
-    }
-
-    private fun mosaic(canvas: Canvas, paint: Paint, left: Float, top: Float, right: Float, bottom: Float) {
-        val colors = intArrayOf(
-            0xE6E23B6A.toInt(),
-            0xE6F0A202.toInt(),
-            0xE61B9AAA.toInt(),
-            0xE65B4DFF.toInt(),
-            0xE63DDC6A.toInt(),
-        )
-        val cols = 7
-        val rows = 3
-        val cw = (right - left) / cols
-        val ch = (bottom - top) / rows
-        for (row in 0 until rows) {
-            for (col in 0 until cols) {
-                val shift = if (row % 2 == 0) 0f else cw * 0.5f
-                val x = left + col * cw + shift
-                val y = top + row * ch
-                paint.shader = null
-                paint.style = Paint.Style.FILL
-                paint.color = colors[(row * cols + col) % colors.size]
-                val path = Path()
-                path.moveTo(x, y + ch * 0.5f)
-                path.lineTo(x + cw * 0.5f, y)
-                path.lineTo(x + cw, y + ch * 0.5f)
-                path.lineTo(x + cw * 0.5f, y + ch)
-                path.close()
-                canvas.drawPath(path, paint)
-            }
-        }
-    }
-
-    private fun neon(canvas: Canvas, paint: Paint, cx: Float, cy: Float, w: Float, h: Float) {
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = h * 0.16f
-        paint.color = 0xEEFF2BD6.toInt()
-        canvas.drawOval(RectF(cx - w * 0.42f, cy - h * 0.42f, cx + w * 0.2f, cy + h * 0.38f), paint)
-        paint.color = 0xEE2EE7FF.toInt()
-        canvas.drawOval(RectF(cx - w * 0.18f, cy - h * 0.36f, cx + w * 0.46f, cy + h * 0.46f), paint)
-        paint.style = Paint.Style.FILL
-        paint.color = 0xAAFFE14A.toInt()
-        canvas.drawCircle(cx, cy, h * 0.16f, paint)
-    }
-
-    private fun garden(canvas: Canvas, paint: Paint, cx: Float, cy: Float, w: Float, h: Float) {
-        val colors = intArrayOf(0xE23DDC6A.toInt(), 0xE2F25C8A.toInt(), 0xE2F0C14A.toInt(), 0xE21EC8B8.toInt())
-        paint.style = Paint.Style.FILL
-        for (i in 0 until 8) {
-            canvas.save()
-            canvas.rotate(i * 45f, cx, cy)
-            paint.color = colors[i % colors.size]
-            canvas.drawOval(RectF(cx - w * 0.08f, cy - h * 0.48f, cx + w * 0.16f, cy - h * 0.02f), paint)
-            canvas.restore()
-        }
-        paint.color = 0xEEFFE7A0.toInt()
-        canvas.drawCircle(cx, cy, h * 0.14f, paint)
     }
 
     private fun festival(canvas: Canvas, paint: Paint, cx: Float, cy: Float, w: Float, h: Float) {

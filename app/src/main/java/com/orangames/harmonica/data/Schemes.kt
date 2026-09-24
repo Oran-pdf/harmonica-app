@@ -25,7 +25,7 @@ object Looks {
     val lits = listOf("Flat", "Glow", "Flame", "Ink", "Orb", "Shine", "Ring", "Spark")
     val idles = listOf("Squares", "Dim", "Rings", "Dents", "Paper", "Pinholes", "Dashes", "Hidden")
     val motions = listOf("Snap", "Shatter", "Rise", "Splatter", "Burst", "Drops", "Fade", "Pop")
-    val backdrops = listOf("Aurora", "Ember", "Lagoon", "Dusk", "Mosaic", "Neon", "Garden", "Festival")
+    val backdrops = listOf("Parchment", "Smoke", "Walnut", "Mist", "Velvet", "Aurora", "Ember", "Festival")
 
     val builtins = listOf(
         Look("simple", "Simple", "The plain bar from your videos so far.", true, 0, 0, 0, 0, -1),
