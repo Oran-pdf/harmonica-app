@@ -727,27 +727,102 @@ def _hole1_harmonics(label: tuple[str, tuple[int, ...]] | None) -> bool:
     return bool(holes) and all(hole in (1, 4, 6, 9) for hole in holes)
 
 
+def _smooth_pitch(low_midi: np.ndarray, width: int = 7) -> np.ndarray:
+    """Short median so a bend depth does not flicker on one frame."""
+    out = np.array(low_midi, dtype=np.float64, copy=True)
+    half = width // 2
+    for i in range(len(low_midi)):
+        window = low_midi[max(0, i - half) : i + half + 1]
+        good = window[np.isfinite(window)]
+        if good.size >= 3:
+            out[i] = float(np.median(good))
+    return out
+
+
+def _hole2_mark(midi: float, previous: str | None) -> str:
+    """Hole 2's semitone bend and whole-step bend meet at F#/F."""
+    if previous == "deep" and midi < 65.62:
+        return "deep"
+    if previous == "bent" and midi > 65.38:
+        return "bent"
+    return "deep" if midi < 65.5 else "bent"
+
+
 def _claim_low_bends(
     labels: list[tuple[str, tuple[int, ...]] | None],
     low_midi: np.ndarray,
     sounding: np.ndarray,
 ) -> list[tuple[str, tuple[int, ...]] | None]:
-    """A draw on hole 1 or 2 lights higher reeds. Keep the low hole."""
+    """A draw on hole 1 or 2 lights higher reeds. Keep the low hole, and follow hole 2's depth."""
+    smoothed = _smooth_pitch(low_midi)
     out: list[tuple[str, tuple[int, ...]] | None] = list(labels)
+    held: str | None = None
     for i, label in enumerate(labels):
-        if not sounding[i] or not np.isfinite(low_midi[i]):
+        if not sounding[i] or not np.isfinite(smoothed[i]):
+            held = None
             continue
-        midi = float(low_midi[i])
+        midi = float(smoothed[i])
         hole = _bend_hole(midi)
         if hole is not None:
-            if label is not None and label[0] == "draw" and label[1] == (hole,):
-                out[i] = ("draw", (hole,), "bent")
-            else:
-                out[i] = ("draw", (hole,), "bent")
+            mark = _hole2_mark(midi, held) if hole == 2 else "bent"
+            held = mark if hole == 2 else None
+            out[i] = ("draw", (hole,), mark)
             continue
+        held = None
         # Straight draw 1 sits just under D. Its octave and twelfth are not extra holes.
         if 61.55 < midi <= 62.6 and _hole1_harmonics(label):
             out[i] = ("draw", (1,))
+    return _absorb_brief_bend_depths(out)
+
+
+def _bend_depth(label) -> bool:
+    return (
+        isinstance(label, tuple)
+        and len(label) == 3
+        and label[0] == "draw"
+        and label[2] in ("bent", "deep")
+    )
+
+
+def _absorb_brief_bend_depths(labels, min_frames: int = 18):
+    """A depth that only flashes on the way down joins the bend it leads into."""
+    out = list(labels)
+    n = len(out)
+    i = 0
+    while i < n:
+        lab = out[i]
+        if not _bend_depth(lab):
+            i += 1
+            continue
+        j = i
+        while j < n and out[j] == lab:
+            j += 1
+        if j - i < min_frames:
+            prev = out[i - 1] if i else None
+            nxt = out[j] if j < n else None
+            donor = None
+            prev_ok = _bend_depth(prev) and prev[1] == lab[1]
+            next_ok = _bend_depth(nxt) and nxt[1] == lab[1]
+            if prev_ok and next_ok:
+                prev_len = 0
+                k = i - 1
+                while k >= 0 and out[k] == prev:
+                    prev_len += 1
+                    k -= 1
+                next_len = 0
+                k = j
+                while k < n and out[k] == nxt:
+                    next_len += 1
+                    k += 1
+                donor = prev if prev_len >= next_len else nxt
+            elif next_ok:
+                donor = nxt
+            elif prev_ok:
+                donor = prev
+            if donor is not None:
+                for k in range(i, j):
+                    out[k] = donor
+        i = j
     return out
 
 
