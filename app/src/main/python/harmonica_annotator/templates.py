@@ -719,23 +719,35 @@ def _bend_hole(midi: float) -> int | None:
     return None
 
 
+def _hole1_harmonics(label: tuple[str, tuple[int, ...]] | None) -> bool:
+    """Draw 4, 6 and 9 are the strong partials of a single draw 1."""
+    if label is None or label[0] != "draw":
+        return False
+    holes = label[1]
+    return bool(holes) and all(hole in (1, 4, 6, 9) for hole in holes)
+
+
 def _claim_low_bends(
     labels: list[tuple[str, tuple[int, ...]] | None],
     low_midi: np.ndarray,
     sounding: np.ndarray,
 ) -> list[tuple[str, tuple[int, ...]] | None]:
-    """A deep draw bend on hole 1 or 2 lights higher reeds. Keep the low hole."""
+    """A draw on hole 1 or 2 lights higher reeds. Keep the low hole."""
     out: list[tuple[str, tuple[int, ...]] | None] = list(labels)
     for i, label in enumerate(labels):
         if not sounding[i] or not np.isfinite(low_midi[i]):
             continue
-        hole = _bend_hole(float(low_midi[i]))
-        if hole is None:
+        midi = float(low_midi[i])
+        hole = _bend_hole(midi)
+        if hole is not None:
+            if label is not None and label[0] == "draw" and label[1] == (hole,):
+                out[i] = ("draw", (hole,), "bent")
+            else:
+                out[i] = ("draw", (hole,), "bent")
             continue
-        if label is not None and label[0] == "draw" and label[1] == (hole,):
-            out[i] = ("draw", (hole,), "bent")
-            continue
-        out[i] = ("draw", (hole,), "bent")
+        # Straight draw 1 sits just under D. Its octave and twelfth are not extra holes.
+        if 61.55 < midi <= 62.6 and _hole1_harmonics(label):
+            out[i] = ("draw", (1,))
     return out
 
 
