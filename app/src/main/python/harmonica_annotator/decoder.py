@@ -91,11 +91,18 @@ def _snap(raw_notes: Sequence[RawNote], harp: HarpLayout, max_cents: float) -> l
         locked = False
         matched: tuple[HoleTone, ...] | None = None
         if note.hole is not None and note.breath is not None:
-            locked_tones = tuple(
-                t for t in harp.tones if t.hole == note.hole and t.breath == note.breath and t.bend == 0
+            same = tuple(
+                t for t in harp.tones if t.hole == note.hole and t.breath == note.breath
             )
-            if locked_tones:
-                matched = locked_tones
+            natural = next((t for t in same if t.bend == 0), None)
+            bends = tuple(t for t in same if t.bend > 0)
+            chosen = natural
+            if natural is not None and bends and note.midi <= natural.midi - 0.45:
+                nearest_bend = min(bends, key=lambda t: abs(t.midi - note.midi))
+                if abs(nearest_bend.midi - note.midi) < abs(natural.midi - note.midi):
+                    chosen = nearest_bend
+            if chosen is not None:
+                matched = (chosen,)
                 locked = True
         if matched is None:
             matched = harp.nearest(note.midi, max_cents=max_cents)
@@ -182,7 +189,8 @@ def _drop_weak_bends(notes: list[_Active]) -> list[_Active]:
         breath = cands[0].breath
         stronger_natural = False
         for other in notes:
-            if other is note or not _overlap(note, other):
+            shared = min(note.t1, other.t1) - max(note.t0, other.t0)
+            if other is note or shared < 0.08:
                 continue
             oc = other.candidates
             if not oc or oc[0].bend != 0:

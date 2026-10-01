@@ -683,6 +683,69 @@ def bank_for_harp(harp: HarpLayout, banks: dict[str, np.ndarray]) -> np.ndarray:
     return transpose_bank(banks["C"], harp.offset)
 
 
+def _low_fundamentals(spec: np.ndarray, freqs: np.ndarray) -> np.ndarray:
+    """MIDI of the strongest peak in the hole 1–2 draw range, per frame."""
+    band = (freqs >= 250.0) & (freqs <= 460.0)
+    out = np.full(spec.shape[1], np.nan, dtype=np.float64)
+    if not np.any(band):
+        return out
+    sl = spec[band]
+    fb = freqs[band]
+    step = float(fb[1] - fb[0]) if len(fb) > 1 else 1.0
+    for i in range(spec.shape[1]):
+        col = sl[:, i]
+        peak = int(np.argmax(col))
+        power = float(col[peak])
+        if power < 1e-8 or power < 0.22 * float(np.max(spec[:, i])):
+            continue
+        delta = 0.0
+        if 0 < peak < len(col) - 1:
+            left, center, right = float(col[peak - 1]), float(col[peak]), float(col[peak + 1])
+            denom = left - 2.0 * center + right
+            if abs(denom) > 1e-12:
+                delta = float(np.clip(0.5 * (left - right) / denom, -0.5, 0.5))
+        freq = float(fb[peak]) + delta * step
+        if freq > 0:
+            out[i] = 69.0 + 12.0 * np.log2(freq / 440.0)
+    return out
+
+
+def _bend_hole(midi: float) -> int | None:
+    """Hole 1 or 2 when the pitch is clearly flat of that draw natural."""
+    if 60.5 <= midi <= 61.55:
+        return 1
+    if 64.5 <= midi <= 66.55:
+        return 2
+    return None
+
+
+def _claim_low_bends(
+    labels: list[tuple[str, tuple[int, ...]] | None],
+    low_midi: np.ndarray,
+    sounding: np.ndarray,
+) -> list[tuple[str, tuple[int, ...]] | None]:
+    """A deep draw bend on hole 1 or 2 lights higher reeds. Keep the low hole."""
+    out: list[tuple[str, tuple[int, ...]] | None] = list(labels)
+    for i, label in enumerate(labels):
+        if not sounding[i] or not np.isfinite(low_midi[i]):
+            continue
+        hole = _bend_hole(float(low_midi[i]))
+        if hole is None:
+            continue
+        if label is not None and label[0] == "draw" and label[1] == (hole,):
+            out[i] = ("draw", (hole,), "bent")
+            continue
+        out[i] = ("draw", (hole,), "bent")
+    return out
+
+
+def _bend_midi(frame_midi: np.ndarray) -> float | None:
+    good = frame_midi[np.isfinite(frame_midi)]
+    if good.size < 3:
+        return None
+    return float(np.median(good))
+
+
 def match_audio(audio: np.ndarray, bank: np.ndarray, *, offset: int = 0) -> list[RawNote]:
     from scipy.optimize import nnls
 
@@ -743,6 +806,8 @@ def match_audio(audio: np.ndarray, bank: np.ndarray, *, offset: int = 0) -> list
     labels = _stabilize_unison_islands(labels, sounding)
     labels = _stabilize_octave_islands(labels, sounding)
     labels = _stabilize_majority_islands(labels, sounding)
+    low_midi = _low_fundamentals(spec, freqs)
+    labels = _claim_low_bends(labels, low_midi, sounding)
 
     notes: list[RawNote] = []
     i = 0
@@ -757,13 +822,22 @@ def match_audio(audio: np.ndarray, bank: np.ndarray, *, offset: int = 0) -> list
             j += 1
         t0 = float(times[i])
         t1 = float(times[min(j, n_frames - 1)] + dt)
-        breath, holes = lab
+        breath, holes = lab[0], lab[1]
         if t1 - t0 < (0.14 if len(holes) >= 2 else 0.08):
             i = j
             continue
         amp = float(np.mean(rms[i:j]))
+        played = _bend_midi(low_midi[i:j])
         for hole in holes:
-            midi = _NATURAL_MIDI[breath][hole - 1] + offset
+            natural = _NATURAL_MIDI[breath][hole - 1] + offset
+            midi = natural
+            if (
+                breath == "draw"
+                and hole in (1, 2)
+                and played is not None
+                and played <= natural - 0.45
+            ):
+                midi = played
             notes.append(RawNote(t0, t1, float(midi), amp, hole=hole, breath=breath))
         i = j
     return notes
