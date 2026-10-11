@@ -299,10 +299,20 @@ private fun HarmonicaOverlay(
                         val reachX = layout.cellW * 0.62f
                         val reachY = (layout.sq + layout.gap) * 0.62f
                         if (abs(x - hit.cx) <= reachX && abs(y - hit.cy) <= reachY) {
+                            val step = (layout.sq + layout.gap) * 0.25f
                             val bend = if (
                                 !hit.above && hit.hole == 5 && hit.bend == 0 &&
-                                y - hit.cy > (layout.sq + layout.gap) * 0.25f
-                            ) 1 else hit.bend
+                                y - hit.cy > step
+                            ) {
+                                1
+                            } else if (
+                                hit.above && hit.hole == 7 && hit.bend == 0 &&
+                                hit.cy - y > step
+                            ) {
+                                1
+                            } else {
+                                hit.bend
+                            }
                             onToggle(hit.above, hit.hole, bend)
                         }
                     }

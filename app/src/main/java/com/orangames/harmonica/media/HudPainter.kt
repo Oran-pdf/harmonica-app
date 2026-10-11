@@ -219,13 +219,22 @@ object HudPainter {
     }
 
     private fun quarterSlides(layout: HudLayout, marks: FrameMarks): List<SquareHit> {
-        if (marks.breath != "draw") return emptyList()
-        val home = layout.squares.firstOrNull { !it.above && it.hole == 5 && it.bend == 0 }
-            ?: return emptyList()
-        val drop = (layout.sq + layout.gap) * 0.5f
-        return marks.holes.filter { it.hole == 5 && it.bend > 0 }.map { mark ->
-            home.copy(bend = mark.bend, cy = home.cy + drop)
+        val shift = (layout.sq + layout.gap) * 0.5f
+        if (marks.breath == "draw") {
+            val home = layout.squares.firstOrNull { !it.above && it.hole == 5 && it.bend == 0 }
+                ?: return emptyList()
+            return marks.holes.filter { it.hole == 5 && it.bend > 0 }.map { mark ->
+                home.copy(bend = mark.bend, cy = home.cy + shift)
+            }
         }
+        if (marks.breath == "blow") {
+            val home = layout.squares.firstOrNull { it.above && it.hole == 7 && it.bend == 0 }
+                ?: return emptyList()
+            return marks.holes.filter { it.hole == 7 && it.bend > 0 }.map { mark ->
+                home.copy(bend = mark.bend, cy = home.cy - shift)
+            }
+        }
+        return emptyList()
     }
 
     private fun drawCap(

@@ -46,6 +46,9 @@ C_DRAW_BENDS: dict[int, tuple[int, ...]] = {
     6: (80,),
 }
 C_BLOW_BENDS: dict[int, tuple[int, ...]] = {
+    # Hole 7 only falls a quarter tone. 83 is the nearest semitone (draw 7's B),
+    # not a second square on the blow row.
+    7: (83,),
     8: (87,),
     9: (90, 89),
     10: (95, 94, 93),

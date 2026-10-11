@@ -101,12 +101,22 @@ object SchemePainter {
             val breath = if (hit.above) "blow" else "draw"
             event.breath == breath && event.holes.any { it.hole == hit.hole && it.bend == hit.bend }
         }
-        if (event.breath != "draw") return matched
-        val home = layout.squares.firstOrNull { !it.above && it.hole == 5 && it.bend == 0 }
-            ?: return matched
-        val drop = (layout.sq + layout.gap) * 0.5f
-        val slides = event.holes.filter { it.hole == 5 && it.bend > 0 }.map { mark ->
-            home.copy(bend = mark.bend, cy = home.cy + drop)
+        val shift = (layout.sq + layout.gap) * 0.5f
+        val slides = ArrayList<SquareHit>()
+        if (event.breath == "draw") {
+            val home = layout.squares.firstOrNull { !it.above && it.hole == 5 && it.bend == 0 }
+            if (home != null) {
+                slides.addAll(event.holes.filter { it.hole == 5 && it.bend > 0 }.map { mark ->
+                    home.copy(bend = mark.bend, cy = home.cy + shift)
+                })
+            }
+        } else if (event.breath == "blow") {
+            val home = layout.squares.firstOrNull { it.above && it.hole == 7 && it.bend == 0 }
+            if (home != null) {
+                slides.addAll(event.holes.filter { it.hole == 7 && it.bend > 0 }.map { mark ->
+                    home.copy(bend = mark.bend, cy = home.cy - shift)
+                })
+            }
         }
         return matched + slides
     }

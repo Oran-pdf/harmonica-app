@@ -8,7 +8,7 @@ import librosa
 import numpy as np
 
 from harmonica_annotator.decoder import RawNote
-from harmonica_annotator.layout import C_BLOW, C_DRAW, C_DRAW_BENDS, HarpLayout
+from harmonica_annotator.layout import C_BLOW, C_BLOW_BENDS, C_DRAW, C_DRAW_BENDS, HarpLayout
 
 SR = 22050
 N_FFT = 4096
@@ -683,9 +683,20 @@ def bank_for_harp(harp: HarpLayout, banks: dict[str, np.ndarray]) -> np.ndarray:
     return transpose_bank(banks["C"], harp.offset)
 
 
+def _peak_midi(col: np.ndarray, fb: np.ndarray, peak: int, step: float) -> float:
+    delta = 0.0
+    if 0 < peak < len(col) - 1:
+        left, center, right = float(col[peak - 1]), float(col[peak]), float(col[peak + 1])
+        denom = left - 2.0 * center + right
+        if abs(denom) > 1e-12:
+            delta = float(np.clip(0.5 * (left - right) / denom, -0.5, 0.5))
+    freq = float(fb[peak]) + delta * step
+    return 69.0 + 12.0 * float(np.log2(freq / 440.0))
+
+
 def _low_fundamentals(spec: np.ndarray, freqs: np.ndarray) -> np.ndarray:
-    """MIDI of the sounding fundamental, from hole 1 draw up through hole 6."""
-    band = (freqs >= 250.0) & (freqs <= 960.0)
+    """MIDI of the sounding fundamental, from hole 1 draw up through hole 7 blow."""
+    band = (freqs >= 250.0) & (freqs <= 1120.0)
     out = np.full(spec.shape[1], np.nan, dtype=np.float64)
     if not np.any(band):
         return out
@@ -705,50 +716,57 @@ def _low_fundamentals(spec: np.ndarray, freqs: np.ndarray) -> np.ndarray:
         if not peaks:
             continue
         low = [p for p in peaks if float(fb[p]) <= 510.0]
-        high = [p for p in peaks if float(fb[p]) >= 520.0]
+        mid = [p for p in peaks if 520.0 <= float(fb[p]) <= 960.0]
+        top = [p for p in peaks if float(fb[p]) >= 970.0]
+        chosen: int | None = None
         if low:
             chosen = max(low, key=lambda p: float(col[p]))
             # A weak half-frequency under hole 4–6 is not the note.
-            if high:
-                best_high = max(high, key=lambda p: float(col[p]))
-                if float(col[best_high]) > float(col[chosen]) * 2.2:
-                    chosen = best_high
-        elif high:
-            chosen = max(high, key=lambda p: float(col[p]))
-        else:
+            if mid:
+                best_mid = max(mid, key=lambda p: float(col[p]))
+                if float(col[best_mid]) > float(col[chosen]) * 2.2:
+                    chosen = best_mid
+        elif mid:
+            chosen = max(mid, key=lambda p: float(col[p]))
+        if top:
+            best_top = max(top, key=lambda p: float(col[p]))
+            if chosen is None:
+                chosen = best_top
+            elif float(col[best_top]) > float(col[chosen]) * 2.2:
+                # Hole 7's C sits above the hole 1–6 band. Take it only when it
+                # is much stronger than the lower peak, so a real lower reed
+                # keeps its own fundamental.
+                chosen = best_top
+        if chosen is None:
             continue
-        peak = chosen
-        delta = 0.0
-        if 0 < peak < len(col) - 1:
-            left, center, right = float(col[peak - 1]), float(col[peak]), float(col[peak + 1])
-            denom = left - 2.0 * center + right
-            if abs(denom) > 1e-12:
-                delta = float(np.clip(0.5 * (left - right) / denom, -0.5, 0.5))
-        freq = float(fb[peak]) + delta * step
-        if freq > 0:
-            out[i] = 69.0 + 12.0 * np.log2(freq / 440.0)
+        freq_midi = _peak_midi(col, fb, chosen, step)
+        if np.isfinite(freq_midi):
+            out[i] = freq_midi
     return out
 
 
-def _bend_hole(midi: float, offset: int = 0) -> int | None:
-    """Hole 1, 2, or 3 when the pitch is clearly flat of that draw natural."""
+def _bend_hole(midi: float, offset: int = 0) -> tuple[str, int] | None:
+    """Breath and hole when the pitch is clearly a bend, not the straight note."""
     midi = midi - offset
     if 60.5 <= midi <= 61.55:
-        return 1
+        return ("draw", 1)
     if 64.5 <= midi <= 66.55:
-        return 2
+        return ("draw", 2)
     # Ab, the deepest draw-3 bend, sits just above draw 2's G.
     if 67.58 <= midi <= 70.55:
-        return 3
+        return ("draw", 3)
     # Draw 4's semitone sits just above blow 4.
     if 72.55 <= midi <= 73.55:
-        return 4
+        return ("draw", 4)
     # Draw 5 only falls a quarter tone, halfway toward E.
     if 76.20 <= midi <= 76.78:
-        return 5
+        return ("draw", 5)
     # Draw 6's semitone sits just above blow 6.
     if 79.32 <= midi <= 80.55:
-        return 6
+        return ("draw", 6)
+    # Blow 7 only falls a quarter tone. Draw 7's B is just below this window.
+    if 83.20 <= midi <= 83.72:
+        return ("blow", 7)
     return None
 
 
@@ -788,10 +806,10 @@ def _smooth_pitch(low_midi: np.ndarray, width: int = 7) -> np.ndarray:
     return out
 
 
-def _bend_mark(midi: float, hole: int, previous: str | None, offset: int = 0) -> str:
+def _bend_mark(midi: float, breath: str, hole: int, previous: str | None, offset: int = 0) -> str:
     """Which legal bend of this hole the pitch is closest to."""
     midi = midi - offset
-    bends = C_DRAW_BENDS[hole]
+    bends = C_BLOW_BENDS[hole] if breath == "blow" else C_DRAW_BENDS[hole]
     if len(bends) == 1:
         return "1"
     if previous is not None and previous.isdigit():
@@ -820,12 +838,13 @@ def _claim_low_bends(
             held_hole = None
             continue
         midi = float(smoothed[i])
-        hole = _bend_hole(midi, offset)
-        if hole is not None:
-            mark = _bend_mark(midi, hole, held if held_hole == hole else None, offset)
+        found = _bend_hole(midi, offset)
+        if found is not None:
+            breath, hole = found
+            mark = _bend_mark(midi, breath, hole, held if held_hole == hole else None, offset)
             held = mark
             held_hole = hole
-            out[i] = ("draw", (hole,), mark)
+            out[i] = (breath, (hole,), mark)
             continue
         held = None
         held_hole = None
@@ -845,7 +864,12 @@ def _claim_low_bends(
         # A release back to A is still draw 6, even if the matcher heard blow 6.
         if 80.55 < placed <= 81.45 and label is not None and label[1] == (6,):
             out[i] = ("draw", (6,))
-    return _flatten_attack_dips(_absorb_brief_bend_depths(out, low_midi, offset))
+            continue
+        # A release back to C is still blow 7. Draw 7 itself is lower than this.
+        if 83.72 < placed <= 84.45 and label is not None and label[0] == "draw" and label[1] == (7,):
+            out[i] = ("blow", (7,))
+    out = _flatten_attack_dips(_absorb_brief_bend_depths(out, low_midi, offset))
+    return _collapse_hole7_partials(out, sounding)
 
 
 def _bridge_held_notes(labels, rms: np.ndarray, gate: float, max_frames: int = 80):
@@ -878,7 +902,7 @@ def _bend_depth(label) -> bool:
     return (
         isinstance(label, tuple)
         and len(label) == 3
-        and label[0] == "draw"
+        and label[0] in ("draw", "blow")
         and (label[2] in ("bent", "deep") or str(label[2]).isdigit())
     )
 
@@ -932,7 +956,8 @@ def _pitch_confirms(segment: np.ndarray, label, donor, offset: int = 0) -> bool:
     if good.size == 0 or not str(label[2]).isdigit() or not str(donor[2]).isdigit():
         return False
     hole = label[1][0]
-    bends = C_DRAW_BENDS[hole]
+    table = C_BLOW_BENDS if label[0] == "blow" else C_DRAW_BENDS
+    bends = table[hole]
     own = float(bends[int(label[2]) - 1])
     other = float(bends[int(donor[2]) - 1])
     med = float(np.median(good)) - offset
@@ -952,12 +977,47 @@ def _flatten_attack_dips(labels, max_frames: int = 12):
         j = i
         while j < n and out[j] == lab:
             j += 1
-        natural = ("draw", lab[1])
+        natural = (lab[0], lab[1])
         prev = out[i - 1] if i else None
         nxt = out[j] if j < n else None
         if j - i <= max_frames and (prev == natural or nxt == natural):
             for k in range(i, j):
                 out[k] = natural
+        i = j
+    return out
+
+
+def _is_single_blow7(label) -> bool:
+    return isinstance(label, tuple) and label[0] == "blow" and label[1] == (7,)
+
+
+def _collapse_hole7_partials(labels, sounding: np.ndarray):
+    """Blow 10 beside a lone blow 7 is that note's octave, not a second hole."""
+    out = list(labels)
+    n = len(out)
+
+    def neighbor(start: int, step: int):
+        k = start
+        while 0 <= k < n:
+            if sounding[k]:
+                return out[k]
+            k += step
+        return None
+
+    i = 0
+    while i < n:
+        lab = out[i]
+        if not (isinstance(lab, tuple) and lab[0] == "blow" and set(lab[1]) == {7, 10}):
+            i += 1
+            continue
+        j = i
+        while j < n and out[j] == lab:
+            j += 1
+        # A real 7+10 octave is its own phrase. The partial inside a hole-7 line is short.
+        short = (j - i) * (HOP / SR) <= 0.85
+        if short and (_is_single_blow7(neighbor(i - 1, -1)) or _is_single_blow7(neighbor(j, 1))):
+            for k in range(i, j):
+                out[k] = ("blow", (7,))
         i = j
     return out
 
@@ -1061,13 +1121,13 @@ def match_audio(audio: np.ndarray, bank: np.ndarray, *, offset: int = 0) -> list
         for hole in holes:
             natural = _NATURAL_MIDI[breath][hole - 1] + offset
             midi = natural
+            quarter = (breath == "draw" and hole == 5) or (breath == "blow" and hole == 7)
             if (
-                breath == "draw"
-                and len(holes) == 1
+                len(holes) == 1
                 and played is not None
                 and (
-                    (hole in (1, 2, 3, 4, 6) and played <= natural - 0.45)
-                    or (hole == 5 and played <= natural - 0.22)
+                    (breath == "draw" and hole in (1, 2, 3, 4, 6) and played <= natural - 0.45)
+                    or (quarter and played <= natural - 0.22)
                 )
             ):
                 midi = played

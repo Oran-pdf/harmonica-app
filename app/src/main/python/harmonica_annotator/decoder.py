@@ -98,13 +98,15 @@ def _snap(raw_notes: Sequence[RawNote], harp: HarpLayout, max_cents: float) -> l
             bends = tuple(t for t in same if t.bend > 0)
             chosen = natural
             flat = (natural.midi - note.midi) if natural is not None else 0.0
-            # Hole 5's bend is a quarter tone, so it never gets as close to the
-            # semitone below as it is to the straight note.
+            # Holes 5 and 7 bend a quarter tone, so the pitch never gets as
+            # close to the semitone below as it is to the straight note.
+            quarter = (note.hole == 5 and note.breath == "draw") or (
+                note.hole == 7 and note.breath == "blow"
+            )
             if (
                 natural is not None
                 and bends
-                and note.hole == 5
-                and note.breath == "draw"
+                and quarter
                 and 0.22 <= flat <= 0.85
             ):
                 chosen = bends[0]
