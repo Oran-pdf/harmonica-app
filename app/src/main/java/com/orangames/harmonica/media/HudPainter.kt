@@ -185,7 +185,7 @@ object HudPainter {
         val lit = layout.squares.filter { hit ->
             val breath = if (hit.above) "blow" else "draw"
             marks.lit(hit.hole, hit.bend, breath)
-        }
+        } + quarterSlides(layout, marks)
         val fill = Paint(Paint.ANTI_ALIAS_FLAG)
         val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
@@ -215,6 +215,16 @@ object HudPainter {
                 run.add(hit)
             }
             flush()
+        }
+    }
+
+    private fun quarterSlides(layout: HudLayout, marks: FrameMarks): List<SquareHit> {
+        if (marks.breath != "draw") return emptyList()
+        val home = layout.squares.firstOrNull { !it.above && it.hole == 5 && it.bend == 0 }
+            ?: return emptyList()
+        val drop = (layout.sq + layout.gap) * 0.5f
+        return marks.holes.filter { it.hole == 5 && it.bend > 0 }.map { mark ->
+            home.copy(bend = mark.bend, cy = home.cy + drop)
         }
     }
 

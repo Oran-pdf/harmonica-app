@@ -684,8 +684,8 @@ def bank_for_harp(harp: HarpLayout, banks: dict[str, np.ndarray]) -> np.ndarray:
 
 
 def _low_fundamentals(spec: np.ndarray, freqs: np.ndarray) -> np.ndarray:
-    """MIDI of the strongest peak in the hole 1–3 draw range, per frame."""
-    band = (freqs >= 250.0) & (freqs <= 510.0)
+    """MIDI of the sounding fundamental, from hole 1 draw up through hole 6."""
+    band = (freqs >= 250.0) & (freqs <= 960.0)
     out = np.full(spec.shape[1], np.nan, dtype=np.float64)
     if not np.any(band):
         return out
@@ -694,10 +694,30 @@ def _low_fundamentals(spec: np.ndarray, freqs: np.ndarray) -> np.ndarray:
     step = float(fb[1] - fb[0]) if len(fb) > 1 else 1.0
     for i in range(spec.shape[1]):
         col = sl[:, i]
-        peak = int(np.argmax(col))
-        power = float(col[peak])
-        if power < 1e-8 or power < 0.22 * float(np.max(spec[:, i])):
+        full = float(np.max(spec[:, i]))
+        if full < 1e-8:
             continue
+        peaks: list[int] = []
+        for p in range(1, len(col) - 1):
+            power = float(col[p])
+            if power >= float(col[p - 1]) and power >= float(col[p + 1]) and power >= 0.22 * full:
+                peaks.append(p)
+        if not peaks:
+            continue
+        low = [p for p in peaks if float(fb[p]) <= 510.0]
+        high = [p for p in peaks if float(fb[p]) >= 520.0]
+        if low:
+            chosen = max(low, key=lambda p: float(col[p]))
+            # A weak half-frequency under hole 4–6 is not the note.
+            if high:
+                best_high = max(high, key=lambda p: float(col[p]))
+                if float(col[best_high]) > float(col[chosen]) * 2.2:
+                    chosen = best_high
+        elif high:
+            chosen = max(high, key=lambda p: float(col[p]))
+        else:
+            continue
+        peak = chosen
         delta = 0.0
         if 0 < peak < len(col) - 1:
             left, center, right = float(col[peak - 1]), float(col[peak]), float(col[peak + 1])
@@ -720,6 +740,15 @@ def _bend_hole(midi: float, offset: int = 0) -> int | None:
     # Ab, the deepest draw-3 bend, sits just above draw 2's G.
     if 67.58 <= midi <= 70.55:
         return 3
+    # Draw 4's semitone sits just above blow 4.
+    if 72.55 <= midi <= 73.55:
+        return 4
+    # Draw 5 only falls a quarter tone, halfway toward E.
+    if 76.20 <= midi <= 76.78:
+        return 5
+    # Draw 6's semitone sits just above blow 6.
+    if 79.32 <= midi <= 80.55:
+        return 6
     return None
 
 
@@ -812,6 +841,10 @@ def _claim_low_bends(
         # Straight draw 3 sits on B. Blow 8, blow 10 and draw 9 are not extra holes.
         if 70.55 < placed <= 71.75 and _hole3_partials(label):
             out[i] = ("draw", (3,))
+            continue
+        # A release back to A is still draw 6, even if the matcher heard blow 6.
+        if 80.55 < placed <= 81.45 and label is not None and label[1] == (6,):
+            out[i] = ("draw", (6,))
     return _flatten_attack_dips(_absorb_brief_bend_depths(out, low_midi, offset))
 
 
@@ -1030,10 +1063,12 @@ def match_audio(audio: np.ndarray, bank: np.ndarray, *, offset: int = 0) -> list
             midi = natural
             if (
                 breath == "draw"
-                and hole in (1, 2, 3)
                 and len(holes) == 1
                 and played is not None
-                and played <= natural - 0.45
+                and (
+                    (hole in (1, 2, 3, 4, 6) and played <= natural - 0.45)
+                    or (hole == 5 and played <= natural - 0.22)
+                )
             ):
                 midi = played
             notes.append(RawNote(t0, t1, float(midi), amp, hole=hole, breath=breath))

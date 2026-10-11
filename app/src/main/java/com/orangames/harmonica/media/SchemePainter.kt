@@ -97,10 +97,18 @@ object SchemePainter {
     private fun idOf(hit: SquareHit) = "${hit.hole}:${hit.bend}:${hit.above}"
 
     private fun hits(layout: HudLayout, event: NoteEvent): List<SquareHit> {
-        return layout.squares.filter { hit ->
+        val matched = layout.squares.filter { hit ->
             val breath = if (hit.above) "blow" else "draw"
             event.breath == breath && event.holes.any { it.hole == hit.hole && it.bend == hit.bend }
         }
+        if (event.breath != "draw") return matched
+        val home = layout.squares.firstOrNull { !it.above && it.hole == 5 && it.bend == 0 }
+            ?: return matched
+        val drop = (layout.sq + layout.gap) * 0.5f
+        val slides = event.holes.filter { it.hole == 5 && it.bend > 0 }.map { mark ->
+            home.copy(bend = mark.bend, cy = home.cy + drop)
+        }
+        return matched + slides
     }
 
     private fun drawBackdrop(canvas: Canvas, layout: HudLayout, ox: Float, oy: Float, kind: Int) {
